@@ -231,160 +231,158 @@ export async function* runFailover(options, deps) {
   const rawPreferred = options && options.model;
   const preferredForRank = isAutoMemberId(rawPreferred) ? '' : rawPreferred;
   const order = rankMembers(deps.candidates, health, preferredForRank);
+
+  // 两轮尝试：
+  //  第 1 轮 —— 只试「未冷却」的成员（正常路径）。
+  //  第 2 轮 —— 若第 1 轮确实试过成员、却没有任何可见正文产出，就把「冷却中」的成员
+  //             也当最后手段补试一遍。这样即便大部分成员因首包超时被熔断、只剩一个
+  //             「只思考不出正文」的成员，也不会把空回答直接甩给用户。
+  const totalRounds = skipCooling ? 1 : 2;
+  const tried = new Set();
   let attempted = 0;
   let lastFailure = null;
   let lastTriedMember = null;
   let prevMemberId = '';
 
-  for (const member of order) {
-    if (parentSignal && parentSignal.aborted) {
-      yield { type: 'finish', reason: { kind: 'aborted', failure: { code: 'ABORTED', message: '请求已取消' } } };
-      return;
-    }
-    if (!skipCooling && health && typeof health.isCoolingDown === 'function' && health.isCoolingDown(member.id)) {
-      continue;
-    }
+  for (let round = 0; round < totalRounds; round += 1) {
+    const includeCooling = round === 1;
+    if (includeCooling && attempted === 0) break; // 第 1 轮一个都没试，谈不上“兜底重试”
 
-    attempted += 1;
-    const wasFailover = attempted > 1;
-    const failoverFrom = wasFailover ? prevMemberId : '';
-    prevMemberId = member.id;
-    lastTriedMember = member;
-    // 是否还有“可用”的备用成员（未在冷却）。只有在有备份时，才值得为了无痕切换而
-    // 暂缓输出、并对“只思考不出话”的成员提前中止；否则老老实实把它的输出给用户。
-    const hasBackup = order
-      .slice(order.indexOf(member) + 1)
-      .some((m) => !(health && typeof health.isCoolingDown === 'function' && health.isCoolingDown(m.id)));
-    const controller = new AbortController();
-    const unlink = linkSignal(parentSignal, controller);
-    let gotFirstByte = false;
-    let timedOut = false;
-    let textTimedOut = false;
-    const timer = firstByteTimeoutMs > 0
-      ? setTimeout(() => { if (!gotFirstByte) { timedOut = true; try { controller.abort(); } catch { /* 忽略 */ } } }, firstByteTimeoutMs)
-      : null;
-    // 「首段可见正文」看门狗：模型可能首字节很快（吐思考），却长时间产不出任何正文，
-    // 把整个输出预算全烧在 reasoning 上。有备份时，超过 firstTextTimeoutMs 仍无正文就中止并切换。
-    let textTimer = null;
-    let emitted = false;      // 是否已向用户吐出过内容（一旦为真就不再无痕切换）
-    let failure = null;
-    let firstByteMs = 0;
-    let lastUsage = null;
-    let sawFinish = null;
-    // 在产出第一段「可见正文」之前，先把块缓存起来：若该成员最终只有思考、没有正文，
-    // 就能整段丢弃、静默切换，用户不会看到半截思考或空回答。
-    const buffer = [];
-    const childOptions = { ...options, provider: deps.childProvider || 'nvidia', model: member.id, signal: controller.signal };
-    const startedAt = Date.now();
-
-    try {
-      for await (const chunk of deps.streamChild(childOptions)) {
-        if (!gotFirstByte) {
-          gotFirstByte = true;
-          firstByteMs = Date.now() - startedAt;
-          if (timer) clearTimeout(timer);
-          if (hasBackup && firstTextTimeoutMs > 0) {
-            textTimer = setTimeout(() => { if (!emitted) { textTimedOut = true; try { controller.abort(); } catch { /* 忽略 */ } } }, firstTextTimeoutMs);
-          }
-        }
-        if (isErrorFinish(chunk)) {
-          failure = (chunk.reason && chunk.reason.failure) || { code: 'MEMBER_ERROR', message: '模型返回错误' };
-          break;
-        }
-        if (chunk && chunk.type === 'usage' && chunk.usage) lastUsage = chunk.usage;
-        if (chunk && chunk.type === 'finish') sawFinish = chunk;
-
-        if (!emitted) {
-          if (isVisibleOutputChunk(chunk)) {
-            // 第一段正文到达：把之前缓存的块按顺序补发，然后转入实时直通。
-            emitted = true;
-            if (textTimer) { clearTimeout(textTimer); textTimer = null; }
-            for (const b of buffer) yield b;
-            buffer.length = 0;
-            yield chunk;
-          } else {
-            buffer.push(chunk);
-          }
-        } else {
-          yield chunk;
-        }
-        if (sawFinish) break;
-      }
-    } catch (error) {
-      failure = timedOut
-        ? { code: 'FIRST_BYTE_TIMEOUT', message: '首包超时（' + firstByteTimeoutMs + 'ms 内无响应），已自动切换' }
-        : { code: 'MEMBER_THROW', message: describeError(error) };
-    } finally {
-      if (timer) clearTimeout(timer);
-      if (textTimer) clearTimeout(textTimer);
-      unlink();
-    }
-
-    // 看门狗主动中止时，子流往往报成 “network aborted”，诊断信息不清晰；
-    // 这里以看门狗为准，统一记为「首包超时 / 首段正文超时」，原始错误码留在 cause 里。
-    if (timedOut) {
-      failure = {
-        code: 'FIRST_BYTE_TIMEOUT',
-        message: '首包超时（' + firstByteTimeoutMs + 'ms 内无响应），已自动切换',
-        cause: failure || undefined,
-      };
-    } else if (textTimedOut && !emitted) {
-      failure = {
-        code: 'FIRST_TEXT_TIMEOUT',
-        message: '首段正文超时（' + firstTextTimeoutMs + 'ms 内无输出正文），已自动切换',
-        cause: failure || undefined,
-      };
-    }
-
-    // 有备份时：成员结束（或看门狗超时）却始终没产出任何可见正文 —— 典型是
-    // “把输出预算全烧在推理上、正文为空”。这是「该成员不称职」，直接换下一个，
-    // 不向用户吐半截内容，正常成员若失败才记熔断。
-    if (hasBackup && !emitted && (sawFinish || !failure)) {
-      const inner = (sawFinish && sawFinish.reason) || null;
-      const reasonNote = inner && inner.kind === 'max-tokens' ? '（输出预算耗尽在思考内容上，未产出正文）' : '（未产出任何正文）';
-      failure = {
-        code: 'EMPTY_ANSWER',
-        message: '模型未产出正文' + reasonNote + '，已自动切换',
-      };
-    } else if (hasBackup && !emitted && textTimedOut && !failure) {
-      failure = {
-        code: 'FIRST_TEXT_TIMEOUT',
-        message: '首段正文超时（' + firstTextTimeoutMs + 'ms 内无输出正文），已自动切换',
-      };
-    }
-
-    if (!failure) {
-      if (!emitted) {
-        // 没有备份可用：即便只有思考/空正文，也如实把它交给用户（已缓存的块此刻补发）。
-        for (const b of buffer) yield b;
-        buffer.length = 0;
-        yield sawFinish || { type: 'finish', reason: { kind: 'stop' } };
+    for (const member of order) {
+      if (parentSignal && parentSignal.aborted) {
+        yield { type: 'finish', reason: { kind: 'aborted', failure: { code: 'ABORTED', message: '请求已取消' } } };
         return;
       }
-      // 已实时产出正文、流正常结束：若没有收到 finish 块，补一个 stop。
-      if (health && typeof health.recordSuccess === 'function') health.recordSuccess(member.id, firstByteMs);
-      if (typeof deps.onAttempt === 'function') {
-        try { deps.onAttempt({ member, error: null, emitted, sessionId, firstByteMs, elapsedMs: Date.now() - startedAt, usage: lastUsage, failover: wasFailover, failoverFrom }); } catch { /* 观测失败不影响主流程 */ }
+      if (tried.has(member.id)) continue;
+      const cooling = Boolean(health && typeof health.isCoolingDown === 'function' && health.isCoolingDown(member.id));
+      if (includeCooling ? !cooling : cooling) continue;
+
+      attempted += 1;
+      tried.add(member.id);
+      const wasFailover = attempted > 1;
+      const failoverFrom = wasFailover ? prevMemberId : '';
+      prevMemberId = member.id;
+      lastTriedMember = member;
+      const controller = new AbortController();
+      const unlink = linkSignal(parentSignal, controller);
+      let gotFirstByte = false;
+      let timedOut = false;
+      let textTimedOut = false;
+      const timer = firstByteTimeoutMs > 0
+        ? setTimeout(() => { if (!gotFirstByte) { timedOut = true; try { controller.abort(); } catch { /* 忽略 */ } } }, firstByteTimeoutMs)
+        : null;
+      // 「首段可见正文」看门狗：模型可能首字节很快（吐思考），却长时间产不出任何正文，
+      // 把整个输出预算全烧在 reasoning 上。超过 firstTextTimeoutMs 仍无正文就中止并切换，
+      // 无论后面还有没有备份成员都要生效 —— 否则用户会干等好几分钟才看到“输出 token 上限”。
+      let textTimer = null;
+      let emitted = false;      // 是否已向用户吐出过可见正文（一旦为真就不再无痕切换）
+      let failure = null;
+      let firstByteMs = 0;
+      let lastUsage = null;
+      let sawFinish = null;
+      // 在产出第一段「可见正文」之前，先把块缓存起来：若该成员最终只有思考、没有正文，
+      // 就能整段丢弃、静默切换，用户不会看到半截思考或空回答。
+      const buffer = [];
+      const childOptions = { ...options, provider: deps.childProvider || 'nvidia', model: member.id, signal: controller.signal };
+      const startedAt = Date.now();
+
+      try {
+        for await (const chunk of deps.streamChild(childOptions)) {
+          if (!gotFirstByte) {
+            gotFirstByte = true;
+            firstByteMs = Date.now() - startedAt;
+            if (timer) clearTimeout(timer);
+            if (firstTextTimeoutMs > 0) {
+              textTimer = setTimeout(() => { if (!emitted) { textTimedOut = true; try { controller.abort(); } catch { /* 忽略 */ } } }, firstTextTimeoutMs);
+            }
+          }
+          if (isErrorFinish(chunk)) {
+            failure = (chunk.reason && chunk.reason.failure) || { code: 'MEMBER_ERROR', message: '模型返回错误' };
+            break;
+          }
+          if (chunk && chunk.type === 'usage' && chunk.usage) lastUsage = chunk.usage;
+          if (chunk && chunk.type === 'finish') sawFinish = chunk;
+
+          if (!emitted) {
+            if (isVisibleOutputChunk(chunk)) {
+              // 第一段正文到达：把之前缓存的块按顺序补发，然后转入实时直通。
+              emitted = true;
+              if (textTimer) { clearTimeout(textTimer); textTimer = null; }
+              for (const b of buffer) yield b;
+              buffer.length = 0;
+              yield chunk;
+            } else {
+              buffer.push(chunk);
+            }
+          } else {
+            yield chunk;
+          }
+          if (sawFinish) break;
+        }
+      } catch (error) {
+        failure = timedOut
+          ? { code: 'FIRST_BYTE_TIMEOUT', message: '首包超时（' + firstByteTimeoutMs + 'ms 内无响应），已自动切换' }
+          : { code: 'MEMBER_THROW', message: describeError(error) };
+      } finally {
+        if (timer) clearTimeout(timer);
+        if (textTimer) clearTimeout(textTimer);
+        unlink();
       }
-      if (!sawFinish) yield { type: 'finish', reason: { kind: 'stop' } };
-      return;
-    }
 
-    lastFailure = failure;
-    // 「能力不符 / 空回答」不是模型“坏了”，而是这次请求不称职：不记熔断，直接换下一个成员。
-    const capability = isCapabilityMismatch(failure) || failure.code === 'EMPTY_ANSWER' || failure.code === 'FIRST_TEXT_TIMEOUT';
-    if (!capability && health && typeof health.recordFailure === 'function') health.recordFailure(member.id, failure);
-    if (typeof deps.onAttempt === 'function') {
-      try { deps.onAttempt({ member, error: failure, emitted, sessionId, firstByteMs, elapsedMs: Date.now() - startedAt, usage: null, failover: wasFailover, failoverFrom, capability }); } catch { /* 观测失败不影响主流程 */ }
-    }
+      // 看门狗主动中止时，子流往往报成 “network aborted”，诊断信息不清晰；
+      // 这里以看门狗为准，统一记为「首包超时 / 首段正文超时」，原始错误码留在 cause 里。
+      if (timedOut) {
+        failure = {
+          code: 'FIRST_BYTE_TIMEOUT',
+          message: '首包超时（' + firstByteTimeoutMs + 'ms 内无响应），已自动切换',
+          cause: failure || undefined,
+        };
+      } else if (textTimedOut && !emitted) {
+        failure = {
+          code: 'FIRST_TEXT_TIMEOUT',
+          message: '首段正文超时（' + firstTextTimeoutMs + 'ms 内无输出正文），已自动切换',
+          cause: failure || undefined,
+        };
+      }
 
-    if (emitted) {
-      // 已向用户产出内容，无法无痕切换，如实返回错误。
-      yield { type: 'finish', reason: { kind: 'error', failure: toFailure(lastFailure) } };
-      return;
-    }
-    if (typeof deps.onFailover === 'function') {
-      try { deps.onFailover({ from: member, to: null, error: failure, sessionId, capability }); } catch { /* 忽略 */ }
+      // 没有产出任何可见正文（典型是“把输出预算全烧在思考上、正文为空”）——
+      // 无论后面还有没有备份成员，都判为 EMPTY_ANSWER：绝不能把空的/纯思考的结果
+      // 静默当成正常回答交给用户（那正是“没有输出内容 + 已达到输出 token 上限”的成因）。
+      if (!emitted && !failure) {
+        const inner = (sawFinish && sawFinish.reason) || null;
+        const reasonNote = inner && inner.kind === 'max-tokens' ? '（输出预算耗尽在思考内容上，未产出正文）' : '（未产出任何正文）';
+        failure = {
+          code: 'EMPTY_ANSWER',
+          message: '模型未产出正文' + reasonNote + '，已自动切换',
+        };
+      }
+
+      if (!failure) {
+        // 走到这里一定已经产出过可见正文（否则上面已判 EMPTY_ANSWER）。
+        if (health && typeof health.recordSuccess === 'function') health.recordSuccess(member.id, firstByteMs);
+        if (typeof deps.onAttempt === 'function') {
+          try { deps.onAttempt({ member, error: null, emitted, sessionId, firstByteMs, elapsedMs: Date.now() - startedAt, usage: lastUsage, failover: wasFailover, failoverFrom }); } catch { /* 观测失败不影响主流程 */ }
+        }
+        if (!sawFinish) yield { type: 'finish', reason: { kind: 'stop' } };
+        return;
+      }
+
+      lastFailure = failure;
+      // 「能力不符 / 空回答 / 首段正文超时」不是模型“坏了”，而是这次请求不称职：不记熔断，直接换下一个成员。
+      const capability = isCapabilityMismatch(failure) || failure.code === 'EMPTY_ANSWER' || failure.code === 'FIRST_TEXT_TIMEOUT';
+      if (!capability && health && typeof health.recordFailure === 'function') health.recordFailure(member.id, failure);
+      if (typeof deps.onAttempt === 'function') {
+        try { deps.onAttempt({ member, error: failure, emitted, sessionId, firstByteMs, elapsedMs: Date.now() - startedAt, usage: null, failover: wasFailover, failoverFrom, capability }); } catch { /* 观测失败不影响主流程 */ }
+      }
+
+      if (emitted) {
+        // 已向用户产出内容，无法无痕切换，如实返回错误。
+        yield { type: 'finish', reason: { kind: 'error', failure: toFailure(lastFailure) } };
+        return;
+      }
+      if (typeof deps.onFailover === 'function') {
+        try { deps.onFailover({ from: member, to: null, error: failure, sessionId, capability, exhausted: false }); } catch { /* 忽略 */ }
+      }
     }
   }
 
@@ -395,11 +393,16 @@ export async function* runFailover(options, deps) {
     };
     return;
   }
-  const failure = toFailure(lastFailure || { code: 'ALL_MEMBERS_FAILED', message: '模型组内所有模型均调用失败' });
-  if (typeof deps.onFailover === 'function') {
-    try { deps.onFailover({ from: lastTriedMember, to: null, error: failure, sessionId, exhausted: true }); } catch { /* 忽略 */ }
+  const finalFailure = toFailure(lastFailure || { code: 'ALL_MEMBERS_FAILED', message: '模型组内所有模型均调用失败' });
+  if (lastFailure && lastFailure.code === 'EMPTY_ANSWER') {
+    // 最后一个失败是“只思考没正文”：给出明确、可操作的提示，而不是含糊的“模型组均失败”。
+    finalFailure.code = 'EMPTY_ANSWER';
+    finalFailure.message = '组内所有模型都没有产出正文（重推理模型把输出预算耗在思考上），请重试、增大 maxTokens 或改用非推理模型';
   }
-  yield { type: 'finish', reason: { kind: 'error', failure } };
+  if (typeof deps.onFailover === 'function') {
+    try { deps.onFailover({ from: lastTriedMember, to: null, error: finalFailure, sessionId, exhausted: true }); } catch { /* 忽略 */ }
+  }
+  yield { type: 'finish', reason: { kind: 'error', failure: finalFailure } };
 }
 
 function toFailure(failure) {

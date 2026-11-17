@@ -370,16 +370,56 @@ test('runFailover: 成员只有思考无正文 → 丢弃缓存、静默切下�
   assert.equal(health.get('reasoner').failCount, 0);
 });
 
-test('runFailover: 无备份成员时，即便只有思考也如实交出（不静默吞掉）', async () => {
+test('runFailover: 唯一成员只有思考无正文 → EMPTY_ANSWER 明确报错，绝不把纯思考当回答交付', async () => {
   const health = createHealthRegistry();
-  const streamChild = () => (async function* () {
-    yield { type: 'reasoning-delta', index: 0, text: '思考' };
+  let called = 0;
+  const streamChild = () => {
+    called += 1;
+    return (async function* () {
+      yield { type: 'reasoning-delta', index: 0, text: '思考' };
+      yield { type: 'finish', reason: { kind: 'max-tokens' } };
+    })();
+  };
+  const out = await collect(runFailover({ model: 'only', messages: [] }, { streamChild, health, candidates: [{ id: 'only' }] }));
+  // 用户绝不能看到“只有思考、正文为空”的结果：必须以 error 结束并给出明确原因
+  assert.equal(out.some((c) => c.type === 'reasoning-delta'), false);
+  const last = out[out.length - 1];
+  assert.equal(last.type, 'finish');
+  assert.equal(last.reason.kind, 'error');
+  assert.equal(last.reason.failure.code, 'EMPTY_ANSWER');
+  // 单成员时也要真的尝试一次（不能因为“没有备份”就跳过）
+  assert.equal(called, 1);
+  // 空正文不记熔断
+  assert.equal(health.get('only').failCount, 0);
+});
+
+test('runFailover: 未冷却成员全空回答时，第 2 轮把冷却中成员也补试', async () => {
+  const health = createHealthRegistry();
+  const calls = [];
+  // 先把 cooling 成员打到冷却：failThreshold=2
+  health.recordFailure('cool', { code: 'FIRST_BYTE_TIMEOUT', message: 'x' });
+  health.recordFailure('cool', { code: 'FIRST_BYTE_TIMEOUT', message: 'x' });
+  assert.equal(health.isCoolingDown('cool'), true);
+  const streamChild = (opts) => (async function* () {
+    calls.push(opts.model);
+    if (opts.model === 'cool') {
+      yield chunkText('冷成员的正文');
+      yield chunkFinishStop;
+      return;
+    }
+    // 未冷却成员只思考、无正文
+    yield { type: 'reasoning-delta', index: 0, text: '想……' };
     yield { type: 'finish', reason: { kind: 'max-tokens' } };
   })();
-  const out = await collect(runFailover({ model: 'only', messages: [] }, { streamChild, health, candidates: [{ id: 'only' }] }));
-  // 只有一个成员、没有备份：把缓存的思考与 finish 原样交出，用户能看到真实情况
-  assert.equal(out.some((c) => c.type === 'reasoning-delta'), true);
-  assert.equal(out[out.length - 1].type, 'finish');
+  const out = await collect(runFailover(
+    { model: '', messages: [] },
+    { streamChild, health, candidates: [{ id: 'warm' }, { id: 'cool' }] },
+  ));
+  const text = out.filter((c) => c.type === 'text-delta').map((c) => c.text).join('');
+  // 第 1 轮 warm 空回答 → 第 2 轮兜底补试 cooling 的 cool，最终拿到正文
+  assert.equal(text, '冷成员的正文');
+  assert.deepEqual(calls, ['warm', 'cool']);
+  assert.equal(out[out.length - 1].reason.kind, 'stop');
 });
 
 test('runFailover: 首段正文看门狗——正文迟迟不来则中止切换', async () => {
