@@ -729,9 +729,7 @@ window.__ModuleLoader__.load({
               fill: '#76B900',
               'aria-hidden': 'true',
             }, h('path', { d: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5' })),
-            h('h2', { style: { margin: 0, fontSize: '16px', fontWeight: 600 } }, 'NVIDIA 模型')
-          ),
-          h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+            h('h2', { style: { margin: 0, fontSize: '16px', fontWeight: 600 } }, 'NVIDIA 模型'),
             (function () {
               const info = updateInfo;
               const hasUpdate = Boolean(info && info.hasUpdate);
@@ -775,7 +773,9 @@ window.__ModuleLoader__.load({
                   opacity: (updateBusy && !hasUpdate) ? 0.6 : 1,
                 },
               }, label);
-            })(),
+            })()
+          ),
+          h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
             h('button', {
               onClick: function () { setHelpOpen(true); },
               'aria-label': '使用说明',

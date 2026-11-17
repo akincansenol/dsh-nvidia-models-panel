@@ -881,8 +881,18 @@ async function checkUpdate(ctx) {
 async function readOwnPackageJson() {
   const { readFile } = await import('node:fs/promises');
   const { fileURLToPath } = await import('node:url');
-  const path = fileURLToPath(new URL('./package.json', import.meta.url));
-  return JSON.parse(await readFile(path, 'utf8'));
+  // index.js 在 src/ 下，package.json 在上一层；两个候选都试，兼容不同加载布局。
+  const candidates = [
+    fileURLToPath(new URL('../package.json', import.meta.url)),
+    fileURLToPath(new URL('./package.json', import.meta.url)),
+  ];
+  let lastErr;
+  for (const path of candidates) {
+    try {
+      return JSON.parse(await readFile(path, 'utf8'));
+    } catch (err) { lastErr = err; }
+  }
+  throw lastErr || new Error('package.json not found');
 }
 
 /** 语义版本比较：v1.3.8 / 1.3.8 / 1.3.8-rc1 等，仅比较数字段。 */
