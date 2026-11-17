@@ -215,7 +215,7 @@ test('describeError handles strings, objects, null', () => {
   assert.equal(describeError({ code: 'C' }), 'C');
 });
 
-test('capability-aware routing: image request only uses vision-capable members', async () => {
+test('capability-aware routing: a text-only model hit with an image 400s, then falls back to a vision member', async () => {
   const calls = [];
   const members = [
     { id: 'text-only-model', name: 'T', inputModalities: ['text'] },
@@ -223,10 +223,22 @@ test('capability-aware routing: image request only uses vision-capable members',
   ];
   const adapter = createGroupAdapter({
     getMembers: async () => members,
-    streamChild: (opts) => (async function* () { calls.push(opts.model); yield chunkText('ok'); yield chunkFinishStop; })(),
+    streamChild: (opts) => (async function* () {
+      calls.push(opts.model);
+      if (opts.model === 'text-only-model') {
+        // upstream rejects the image with a 400 → INVALID_REQUEST-ish failure
+        yield { type: 'finish', reason: { kind: 'error', failure: { code: 'INVALID_REQUEST', message: 'Received multimodal data but multimodal processing is not enabled' } } };
+        return;
+      }
+      yield chunkText('ok');
+      yield chunkFinishStop;
+    })(),
     health: createHealthRegistry(),
+    firstByteTimeoutMs: 0,
+    firstTextTimeoutMs: 0,
   });
-  // Pick the text-only member, but send an image → must skip to the omni member.
+  // Pick the text-only member explicitly, but send an image → it is tried first (honest),
+  // 400s as a capability mismatch (no circuit-open), then the vision member succeeds.
   const imgOptions = {
     model: 'text-only-model',
     messages: [{ role: 'user', content: [{ type: 'text', text: 'look' }, { type: 'image', source: {} }] }],
@@ -234,7 +246,52 @@ test('capability-aware routing: image request only uses vision-capable members',
   const out = [];
   for await (const c of adapter.stream(imgOptions)) out.push(c);
   assert.equal(out[out.length - 1].reason.kind, 'stop');
-  assert.deepEqual(calls, ['nvidia/nemotron-3-nano-omni-30b-a3b-reasoning']);
+  assert.deepEqual(calls, ['text-only-model', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning']);
+});
+
+test('capability-aware routing is SOFT: non-vision members stay as fallback after vision ones', async () => {
+  const calls = [];
+  const members = [
+    { id: 'nvidia/nemotron-3.5-super-vl-120b-a12b', name: 'VL', inputModalities: ['text', 'image'] },
+    { id: 'nvidia/nemotron-3.5-lightning-30b-a3b', name: 'Lightning', inputModalities: ['text'] },
+    { id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', name: 'Omni', inputModalities: ['text', 'image'] },
+  ];
+  const adapter = createGroupAdapter({
+    getMembers: async () => members,
+    streamChild: (opts) => (async function* () {
+      calls.push(opts.model);
+      if (opts.model.endsWith('super-vl-120b-a12b') || opts.model.includes('omni')) {
+        yield chunkFinishErr('FIRST_BYTE_TIMEOUT', '首包超时');
+        return;
+      }
+      yield chunkText('fallback ok');
+      yield chunkFinishStop;
+    })(),
+    health: createHealthRegistry(),
+    firstByteTimeoutMs: 0,
+    firstTextTimeoutMs: 0,
+  });
+  const imgOptions = {
+    model: AUTO_MEMBER_ID,
+    messages: [{ role: 'user', content: [{ type: 'text', text: 'look' }, { type: 'image', source: {} }] }],
+  };
+  const out = [];
+  for await (const c of adapter.stream(imgOptions)) out.push(c);
+  // Vision (super-vl) first; then the text-only member is STILL available as a fallback and
+  // succeeds — the reasoning model (omni) sorts last so it is never reached. The key assertion:
+  // the text-only member is NOT dropped from the candidate list just because an image is present.
+  assert.deepEqual(calls, ['nvidia/nemotron-3.5-super-vl-120b-a12b', 'nvidia/nemotron-3.5-lightning-30b-a3b']);
+  assert.equal(out[out.length - 1].reason.kind, 'stop');
+  const text = out.filter((c) => c.type === 'text-delta').map((c) => c.text).join('');
+  assert.equal(text, 'fallback ok');
+});
+
+test('isCapabilityMismatch treats 400 / multimodal-not-enabled as non-fatal (no circuit open)', () => {
+  assert.equal(isCapabilityMismatch({ code: 'INVALID_REQUEST', message: 'bad' }), true);
+  assert.equal(isCapabilityMismatch({ code: 'X', message: 'Received multimodal data but multimodal processing is not enabled' }), true);
+  assert.equal(isCapabilityMismatch({ code: 'X', message: 'This model does not support image input' }), true);
+  assert.equal(isCapabilityMismatch({ code: 'SERVER', message: 'boom' }), false);
+  assert.equal(isCapabilityMismatch(null), false);
 });
 
 test('requestHasImage / memberSupportsImage helpers', () => {

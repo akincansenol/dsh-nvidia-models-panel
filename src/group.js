@@ -29,7 +29,12 @@ export function isAutoMemberId(id) {
  */
 export function isCapabilityMismatch(failure) {
   if (!failure || typeof failure !== 'object') return false;
-  return failure.code === 'CONTEXT_WINDOW_EXCEEDED' || failure.code === 'MODEL_SWITCH_COMPACTION_FAILED';
+  if (failure.code === 'CONTEXT_WINDOW_EXCEEDED' || failure.code === 'MODEL_SWITCH_COMPACTION_FAILED' || failure.code === 'INVALID_REQUEST') {
+    return true; // 400 类「这次请求该模型吃不下」——换下一个即可，不熔断
+  }
+  // 上游把「多模态未启用 / 不支持图片」报成 400，也归到这一类。
+  const msg = String(failure.message || '');
+  return /multimodal|not enabled|invalid.?request|does not support image/i.test(msg);
 }
 
 /** 判定一个流块是否为错误/取消的 finish。 */
@@ -511,11 +516,16 @@ export function createGroupAdapter(deps) {
         const pickAuto = isAutoMemberId(options && options.model);
         const current = pickAuto ? null : members.find((m) => m.id === (options && options.model));
         let candidates = current ? [current, ...members.filter((m) => m.id !== current.id)] : members;
-        // 能力感知路由：含图片的请求只允许多模态成员参与（否则纯文本模型必然 400）。
+        // 能力感知路由（软过滤）：含图片的请求**优先**把多模态成员排到前面，
+        // 但保留全部成员作为后备。绝不把组员砍到只剩"看起来支持图片"的那几个——
+        // id 正则判断并不可靠（如 muse-glimmer 实为多模态却被判为纯文本），
+        // 一旦把其余成员剔除，组里常常只剩 1~2 人，一个抖动就整轮失败。
+        // 纯文本成员若真的收到图片，会由上游报 400，isCapabilityMismatch 归为
+        // INVALID_REQUEST 类 → 直接换下一个且不熔断，代价可控。
         if (requestHasImage(options)) {
           const visionCapable = candidates.filter((m) => memberSupportsImage(m));
-          if (visionCapable.length) candidates = visionCapable;
-          // 若组内无人支持图片，保持原列表，交给上游如实报错（总比静默丢掉图片好）。
+          const rest = candidates.filter((m) => !memberSupportsImage(m));
+          if (visionCapable.length) candidates = [...visionCapable, ...rest];
         }
         const onAttempt = deps.onAttempt
           ? (info) => deps.onAttempt({ ...info, sessionId })

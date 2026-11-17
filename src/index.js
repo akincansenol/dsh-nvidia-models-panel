@@ -109,7 +109,9 @@ function describeModel(id) {
 
 /** True for model families the chat-completions probe cannot meaningfully call. */
 function isNonChatModel(id) {
-  return /embed|rerank|reward|diffusion/i.test(id);
+  // embed/rerank/reward/diffusion——不是对话模型；
+  // guard/safety/calibration/parse/translate——是专用模型，放进模型组只会每一轮都失败。
+  return /embed|rerank|reward|diffusion|guard|safety|calibration|nemotron-parse|riva-translate/i.test(String(id || ''));
 }
 
 /** Context-bound key resolver installed during apply(); prefers env, then the credential store. */
@@ -567,7 +569,7 @@ async function readNvidiaConfigModels(ctx) {
       contextWindow,
       maxTokens: Number.isFinite(m.maxTokens) ? m.maxTokens : null,
     };
-  }).filter((m) => m.id);
+  }).filter((m) => m.id && !isNonChatModel(m.id));
 }
 
 /** 取得一个会话对象（best-effort，用于把故障转移事件写进会话投影）。 */
