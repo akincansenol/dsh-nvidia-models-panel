@@ -774,6 +774,8 @@ function createNvidiaModelsRoute(ctx) {
         if (typeof body.day === 'string' && body.day) groupUsage.reset(body.day);
         else groupUsage.reset();
         result = { ok: true, stats: groupUsage.snapshot() };
+      } else if (action === 'checkUpdate') {
+        result = await checkUpdate(ctx);
       } else {
         result = await detectNvidiaModels();
         if (result && result.source === 'live') lastDetectedModels = normalizeGroupMembers(result.models);
@@ -787,6 +789,79 @@ function createNvidiaModelsRoute(ctx) {
 }
 
 /** Command: write the NVIDIA model list into the llm-pi-ai nvidia provider. */
+const GITHUB_REPO = 'windxxf/dsh-nvidia-models-panel';
+const GITHUB_RELEASES_URL = 'https://github.com/' + GITHUB_REPO + '/releases';
+
+/** 收集 GitHub 上所有版本标签（tags 与 releases 合并取最大者；tag 比 release 更可靠）。 */
+async function fetchLatestTag() {
+  const tags = [];
+  const urls = [
+    'https://api.github.com/repos/' + GITHUB_REPO + '/tags?per_page=100',
+    'https://api.github.com/repos/' + GITHUB_REPO + '/releases?per_page=100',
+  ];
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        headers: { accept: 'application/vnd.github+json', 'user-agent': 'dsh-nvidia-models-panel' },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) continue;
+      const list = await res.json();
+      if (!Array.isArray(list)) continue;
+      for (const item of list) {
+        const tag = item && (item.name || item.tag_name);
+        if (typeof tag === 'string' && /^v?\d+\.\d+/.test(tag)) tags.push(tag);
+      }
+    } catch { /* 网络不通或 GitHub 不可达，跳过该来源 */ }
+  }
+  if (!tags.length) return null;
+  tags.sort((a, b) => (semverGt(a, b) ? -1 : semverGt(b, a) ? 1 : 0));
+  return tags[0];
+}
+
+async function checkUpdate(ctx) {
+  // 获取插件自身版本（尽力而为，失败不阻塞）。
+  let currentVersion = null;
+  try {
+    const pkg = await readOwnPackageJson();
+    if (typeof pkg.version === 'string') currentVersion = pkg.version;
+  } catch { /* 忽略 */ }
+
+  let latestTag = null;
+  try {
+    latestTag = await fetchLatestTag();
+  } catch { /* 忽略 */ }
+
+  const hasUpdate = Boolean(currentVersion && latestTag && semverGt(latestTag, currentVersion));
+  return {
+    ok: true,
+    currentVersion,
+    latestTag,
+    latestUrl: GITHUB_RELEASES_URL,
+    hasUpdate,
+    message: hasUpdate ? ('发现新版本 ' + latestTag + '，当前 ' + currentVersion) : '已是最新版本',
+  };
+}
+
+/** 读取插件自身 package.json 的内容（用于读取当前版本号）。 */
+async function readOwnPackageJson() {
+  const { readFile } = await import('node:fs/promises');
+  const { fileURLToPath } = await import('node:url');
+  const path = fileURLToPath(new URL('./package.json', import.meta.url));
+  return JSON.parse(await readFile(path, 'utf8'));
+}
+
+/** 语义版本比较：v1.3.8 / 1.3.8 / 1.3.8-rc1 等，仅比较数字段。 */
+function semverGt(a, b) {
+  const norm = (s) => String(s || '').replace(/^v/, '').split(/[.\-]/).map((p) => Number(p) || 0);
+  const x = norm(a), y = norm(b);
+  for (let i = 0; i < Math.max(x.length, y.length); i += 1) {
+    const xi = x[i] || 0, yi = y[i] || 0;
+    if (xi !== yi) return xi > yi;
+  }
+  return false;
+}
+
 export function apply(ctx) {
   const disposers = [];
 

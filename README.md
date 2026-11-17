@@ -77,3 +77,12 @@ git clone https://github.com/windxxf/dsh-nvidia-models-panel.git
 ## License
 
 [MIT](LICENSE)
+
+## 新版本检测
+
+面板标题栏右侧会自动检查 GitHub 上是否有更新的版本（读取 `windxxf/dsh-nvidia-models-panel` 的 tags/releases，与本地 `package.json` 的 version 比较，取最大版本号）。
+
+- 有新版本时，面板顶部（Tab 栏上方）出现绿色横幅：「发现新版本 vX.Y.Z，当前 vA.B.C」+「查看更新」按钮。
+- 点「查看更新」直接跳转到 GitHub Releases 页面（`https://github.com/windxxf/dsh-nvidia-models-panel/releases`）。
+- 检测在面板挂载时执行一次（8 秒超时）；网络不通或 GitHub 不可达时静默跳过，不打扰使用。
+- 本机是 `link:` 安装时市场不会提示更新，所以这个面板内的检测是主要的版本提醒方式。
