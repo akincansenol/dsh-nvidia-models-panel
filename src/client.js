@@ -734,17 +734,18 @@ window.__ModuleLoader__.load({
               const info = updateInfo;
               const hasUpdate = Boolean(info && info.hasUpdate);
               const failed = Boolean(info && info.reachable === false && !hasUpdate);
-              const upToDate = Boolean(info && !hasUpdate && info.reachable !== false);
+              const currentVersion = info && info.currentVersion ? String(info.currentVersion).replace(/^v/, '') : null;
               let label, color;
               if (hasUpdate) {
                 label = '新版本 ↑ ' + (info.latestTag || '');
                 color = '230,170,0';
+              } else if (currentVersion) {
+                // 已知当前版本且无新版本：一律显示版本号；网络不可达时加 ⚠ 提示可点击重试
+                label = 'v' + currentVersion + (failed ? ' ⚠' : '');
+                color = failed ? '200,120,60' : '128,128,128';
               } else if (failed) {
                 label = '检查失败 · 重试';
                 color = '200,120,60';
-              } else if (upToDate) {
-                label = info.currentVersion ? ('v' + String(info.currentVersion).replace(/^v/, '')) : '已是最新';
-                color = '128,128,128';
               } else {
                 label = updateBusy ? '检查中…' : '检查更新';
                 color = '128,128,128';
@@ -759,7 +760,7 @@ window.__ModuleLoader__.load({
                   }
                 },
                 disabled: updateBusy && !hasUpdate,
-                title: hasUpdate ? (info.message || '查看更新') : '检查更新',
+                title: hasUpdate ? (info.message || '查看更新') : (currentVersion ? ('当前版本 v' + currentVersion + (failed ? '（检查更新失败，点击重试）' : '，点击重新检查')) : '检查更新'),
                 style: {
                   padding: '3px 9px',
                   fontSize: '11px',
