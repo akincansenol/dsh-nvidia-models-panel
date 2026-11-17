@@ -168,3 +168,31 @@ test('disposer is idempotent and resets resolver', () => {
   assert.doesNotThrow(() => dispose());
   assert.doesNotThrow(() => dispose());
 });
+
+test('apply() clears stale health so previously-cooled members are retried', async () => {
+  const mk = (obj) => ({ body: { getReader() { let done = false; const b = new TextEncoder().encode(JSON.stringify(obj)); return { async read() { if (done) return { done: true }; done = true; return { done: false, value: b }; }, async cancel() {} }; } } });
+  const mc = makeCtx();
+  // 上游全失败：让成员累计失败、进入熔断。
+  mc.services.llm.stream = () => (async function* () {
+    yield { type: 'finish', reason: { kind: 'error', failure: { code: 'SERVER', message: 'boom' } } };
+  })();
+  plugin.apply(mc.ctx);
+  const route = mc.registered.routes[0].route;
+  const adapter = mc.registered.adapters.get('nvidia-group');
+  for (let i = 0; i < 2; i += 1) {
+    const prepared = await adapter.prepareCall('nvidia-group', 'nvidia/nemotron-3.5-lightning-30b-a3b');
+    // eslint-disable-next-line no-unused-vars
+    for await (const _ of prepared.stream({ model: 'nvidia/nemotron-3.5-lightning-30b-a3b', messages: [], sessionId: mc.sid })) { /* drain */ }
+  }
+  const before = await (await route.fetch(mk({ action: 'groupStatus' }))).json();
+  const mBefore = before.members.find((m) => m.id === 'nvidia/nemotron-3.5-lightning-30b-a3b');
+  assert.ok(mBefore.failCount >= 2, 'seat should have accumulated failures');
+  assert.ok(mBefore.cooldownRemainingMs > 0, 'seat should be cooling down before reload');
+
+  // 重载（再次 apply）应清空这份进程级旧健康状态。
+  plugin.apply(mc.ctx);
+  const after = await (await route.fetch(mk({ action: 'groupStatus' }))).json();
+  const mAfter = after.members.find((m) => m.id === 'nvidia/nemotron-3.5-lightning-30b-a3b');
+  assert.equal(mAfter.failCount, 0);
+  assert.equal(mAfter.cooldownRemainingMs, 0);
+});

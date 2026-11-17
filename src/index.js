@@ -790,6 +790,12 @@ function createNvidiaModelsRoute(ctx) {
 export function apply(ctx) {
   const disposers = [];
 
+  // 每次加载 / 重载插件时清空上一次残留的模型健康（失败计数 + 熔断冷却）。
+  // 健康表是进程级单例缓存：旧版本（多模态硬过滤）可能把一批本来可用的成员
+  // 反复判失败、推进熔断，重载后如果沿用旧状态，刚修好的成员仍会被跳过。
+  // 清零是安全的——真正的上游不可用仍由 FAILOVER 与看板实时探测照常兜底。
+  try { groupHealth.reset(); } catch { /* 忽略 */ }
+
   // Slash-command handlers run against an agent invocation ({ agent, rawInput }),
   // NOT the plugin context — so both handlers close over the plugin ctx instead.
   disposers.push(ctx.commands.register({
