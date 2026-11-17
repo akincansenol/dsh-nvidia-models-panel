@@ -745,7 +745,7 @@ window.__ModuleLoader__.load({
                 label = '检查失败 · 重试';
                 color = '200,120,60';
               } else if (upToDate) {
-                label = '已是最新';
+                label = info.currentVersion ? ('v' + String(info.currentVersion).replace(/^v/, '')) : '已是最新';
                 color = '128,128,128';
               } else {
                 label = updateBusy ? '检查中…' : '检查更新';
