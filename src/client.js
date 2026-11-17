@@ -731,7 +731,51 @@ window.__ModuleLoader__.load({
             }, h('path', { d: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5' })),
             h('h2', { style: { margin: 0, fontSize: '16px', fontWeight: 600 } }, 'NVIDIA 模型')
           ),
-          h('div', { style: { display: 'flex', alignItems: 'center', gap: '2px' } },
+          h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+            (function () {
+              const info = updateInfo;
+              const hasUpdate = Boolean(info && info.hasUpdate);
+              const failed = Boolean(info && info.reachable === false && !hasUpdate);
+              const upToDate = Boolean(info && !hasUpdate && info.reachable !== false);
+              let label, color;
+              if (hasUpdate) {
+                label = '新版本 ↑ ' + (info.latestTag || '');
+                color = '230,170,0';
+              } else if (failed) {
+                label = '检查失败 · 重试';
+                color = '200,120,60';
+              } else if (upToDate) {
+                label = '已是最新';
+                color = '128,128,128';
+              } else {
+                label = updateBusy ? '检查中…' : '检查更新';
+                color = '128,128,128';
+              }
+              return h('button', {
+                onClick: function () {
+                  if (hasUpdate) {
+                    const url = info.latestUrl || 'https://github.com/windxxf/dsh-nvidia-models-panel/releases/latest';
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                  } else if (!updateBusy) {
+                    refreshUpdateCheck();
+                  }
+                },
+                disabled: updateBusy && !hasUpdate,
+                title: hasUpdate ? (info.message || '查看更新') : '检查更新',
+                style: {
+                  padding: '3px 9px',
+                  fontSize: '11px',
+                  lineHeight: 1.4,
+                  color: 'rgb(' + color + ')',
+                  background: 'rgba(' + color + ',0.12)',
+                  border: '1px solid rgba(' + color + ',0.35)',
+                  borderRadius: '999px',
+                  cursor: (hasUpdate || !updateBusy) ? 'pointer' : 'default',
+                  whiteSpace: 'nowrap',
+                  opacity: (updateBusy && !hasUpdate) ? 0.6 : 1,
+                },
+              }, label);
+            })(),
             h('button', {
               onClick: function () { setHelpOpen(true); },
               'aria-label': '使用说明',
@@ -841,30 +885,6 @@ window.__ModuleLoader__.load({
             'Key 保存在 Harness 凭据存储（与正式 nvidia 模型路由共用 NVIDIA_API_KEY 引用），不会写入配置文件或日志；保存后下一次请求立即生效。'),
           keyMsg ? h('p', { style: { margin: 0, fontSize: '12px', lineHeight: 1.5 } }, keyMsg) : null,
         ),
-        updateInfo && updateInfo.hasUpdate ? h('div', {
-          key: 'update-banner',
-          style: {
-            display: 'flex', alignItems: 'center', gap: '10px',
-            padding: '8px 12px',
-            background: 'rgba(118,185,0,0.12)',
-            border: '1px solid rgba(118,185,0,0.5)',
-            borderRadius: '6px',
-          },
-        },
-          h('span', { style: { flex: '1 1 auto', fontSize: '12px', lineHeight: 1.5 } },
-            updateInfo.message || ('发现新版本 ' + updateInfo.latestTag + '，当前 ' + updateInfo.currentVersion)),
-          h('button', {
-            onClick: function () {
-              const url = updateInfo.latestUrl || 'https://github.com/windxxf/dsh-nvidia-models-panel/releases/latest';
-              window.open(url, '_blank', 'noopener,noreferrer');
-            },
-            style: {
-              padding: '5px 10px', fontSize: '12px', fontWeight: 500,
-              background: '#76B900', color: '#ffffff', border: 'none',
-              borderRadius: '4px', cursor: 'pointer', whiteSpace: 'nowrap',
-            },
-          }, '查看更新')
-        ) : null,
         tabBar,
         tab === 'models' ? h('div', {
           key: 'modelsPane',

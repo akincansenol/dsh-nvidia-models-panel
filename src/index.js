@@ -815,31 +815,34 @@ function createNvidiaModelsRoute(ctx) {
 const GITHUB_REPO = 'windxxf/dsh-nvidia-models-panel';
 const GITHUB_RELEASES_URL = 'https://github.com/' + GITHUB_REPO + '/releases';
 
-/** 收集 GitHub 上所有版本标签（tags 与 releases 合并取最大者；tag 比 release 更可靠）。 */
-async function fetchLatestTag() {
-  const tags = [];
-  const urls = [
-    'https://api.github.com/repos/' + GITHUB_REPO + '/tags?per_page=100',
-    'https://api.github.com/repos/' + GITHUB_REPO + '/releases?per_page=100',
-  ];
-  for (const url of urls) {
-    try {
-      const res = await fetch(url, {
-        headers: { accept: 'application/vnd.github+json', 'user-agent': 'dsh-nvidia-models-panel' },
-        signal: AbortSignal.timeout(8000),
-      });
-      if (!res.ok) continue;
-      const list = await res.json();
-      if (!Array.isArray(list)) continue;
-      for (const item of list) {
-        const tag = item && (item.name || item.tag_name);
-        if (typeof tag === 'string' && /^v?\d+\.\d+/.test(tag)) tags.push(tag);
-      }
-    } catch { /* 网络不通或 GitHub 不可达，跳过该来源 */ }
+/**
+ * 读取 GitHub 远端最新版本。
+ * 首选 raw.githubusercontent.com 的 HEAD/package.json（也是 dshmarket 的判定方式）——
+ * 这个通道不吃 GitHub REST API 的匿名速率限制（每小时 60 次，很容易被耗尽）。
+ * 令牌缓存 30 分钟，避免每次挂载面板都发请求。
+ */
+let _updateCache = { at: 0, version: null };
+const UPDATE_CACHE_MS = 30 * 60 * 1000;
+
+async function fetchLatestVersion() {
+  if (_updateCache.version && Date.now() - _updateCache.at < UPDATE_CACHE_MS) {
+    return _updateCache.version;
   }
-  if (!tags.length) return null;
-  tags.sort((a, b) => (semverGt(a, b) ? -1 : semverGt(b, a) ? 1 : 0));
-  return tags[0];
+  let version = null;
+  const url = 'https://raw.githubusercontent.com/' + GITHUB_REPO + '/HEAD/package.json';
+  // 网络间歇性抖动时重试一次（github 443 在本机时断时续）。
+  for (let attempt = 0; attempt < 2 && !version; attempt += 1) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && typeof data.version === 'string') version = data.version;
+      }
+    } catch { /* 网络不通，下一轮重试 */ }
+    if (!version && attempt === 0) await new Promise((r) => setTimeout(r, 500));
+  }
+  if (version) _updateCache = { at: Date.now(), version };
+  return version;
 }
 
 async function checkUpdate(ctx) {
@@ -850,19 +853,27 @@ async function checkUpdate(ctx) {
     if (typeof pkg.version === 'string') currentVersion = pkg.version;
   } catch { /* 忽略 */ }
 
-  let latestTag = null;
+  let latestVersion = null;
   try {
-    latestTag = await fetchLatestTag();
+    latestVersion = await fetchLatestVersion();
   } catch { /* 忽略 */ }
+  const reachable = Boolean(latestVersion);
 
-  const hasUpdate = Boolean(currentVersion && latestTag && semverGt(latestTag, currentVersion));
+  const latestTag = latestVersion ? ('v' + latestVersion.replace(/^v/, '')) : null;
+  const hasUpdate = Boolean(currentVersion && latestVersion && semverGt(latestVersion, currentVersion));
+  const message = hasUpdate
+    ? ('发现新版本 ' + latestTag + '，当前 ' + currentVersion)
+    : (!reachable
+      ? '检查失败：暂时无法连接 GitHub（网络问题），请稍后重试'
+      : '已是最新版本');
   return {
     ok: true,
     currentVersion,
     latestTag,
     latestUrl: GITHUB_RELEASES_URL,
     hasUpdate,
-    message: hasUpdate ? ('发现新版本 ' + latestTag + '，当前 ' + currentVersion) : '已是最新版本',
+    reachable,
+    message,
   };
 }
 
