@@ -583,11 +583,34 @@ function sessionFor(ctx, sessionId) {
   }
 }
 
-/** 把一条组事件追加进会话（best-effort；失败不影响主流程）。 */
+// —— 会话事件写入：只使用 harness 官方的 plugin record API ——
+// 背景：session.append() 无法写 ignorable 标记。用它写 harness 词表外的
+// 类型（如 nvidia-group/*）会让会话日志下次加载时被持久化层拒绝：
+//   "contains event type ... unknown to this harness and not marked ignorable"
+// appendPluginRecord() 写的 plugin: 记录会自动带 ignorable:true，未知
+// 类型可被安全跳过，不会再把整段会话历史卡死。
+const GROUP_RECORD_PROBE = 'plugin:dsh-nvidia-models-panel/probe';
+const GROUP_RECORD_FAILOVER = 'plugin:dsh-nvidia-models-panel/failover';
+let dshSessionApi; // undefined=未加载；null=不可用；对象={ appendPluginRecord }
+function getSessionApi() {
+  if (dshSessionApi !== undefined) return Promise.resolve(dshSessionApi);
+  return import('@deepseek-ai/dsh-session').then(
+    (mod) => (dshSessionApi = typeof mod?.appendPluginRecord === 'function' ? mod : null),
+    () => (dshSessionApi = null),
+  );
+}
+
+/** 把一条组事件作为 plugin record 追加进会话（best-effort；失败不影响主流程）。 */
 function appendGroupEvent(ctx, sessionId, type, data) {
   try {
     const session = sessionFor(ctx, sessionId);
-    if (session && typeof session.append === 'function') session.append(type, data);
+    if (!session) return;
+    // 旧 harness 没有 appendPluginRecord 时宁可不写，绝不退回
+    // session.append() 写不可忽略的未知类型（那会再次损坏会话）。
+    void getSessionApi().then((api) => {
+      if (!api || typeof api.appendPluginRecord !== 'function') return;
+      try { api.appendPluginRecord(session, type, data); } catch { /* best-effort */ }
+    });
   } catch {
     // 会话不可用时，看板仍能靠 groupStatus 的实时快照工作。
   }
@@ -608,7 +631,7 @@ function buildGroupAdapter(ctx, llm) {
     firstByteTimeoutMs: () => groupConfig.firstByteTimeoutMs,
     firstTextTimeoutMs: () => groupConfig.firstTextTimeoutMs,
     onAttempt: (info) => {
-      appendGroupEvent(ctx, info.sessionId, 'nvidia-group/probe', {
+      appendGroupEvent(ctx, info.sessionId, GROUP_RECORD_PROBE, {
         member: info.member.id,
         status: info.error ? 'fail' : 'ok',
         error: info.error ? describeErrorSafe(info.error) : '',
@@ -633,7 +656,7 @@ function buildGroupAdapter(ctx, llm) {
       }
     },
     onFailover: (info) => {
-      appendGroupEvent(ctx, info.sessionId, 'nvidia-group/failover', {
+      appendGroupEvent(ctx, info.sessionId, GROUP_RECORD_FAILOVER, {
         from: info.from ? info.from.id : '',
         to: info.to ? info.to.id : '',
         error: info.error ? describeErrorSafe(info.error) : '',
@@ -697,7 +720,7 @@ async function probeGroup(ctx) {
       groupHealth.recordFailure(m.id, { message: detail });
       out.push({ id: m.id, status: 'fail', detail });
     }
-    appendGroupEvent(ctx, null, 'nvidia-group/probe', { member: m.id, status: out[out.length - 1].status === 'ok' ? 'ok' : 'fail', error: out[out.length - 1].detail || '' });
+    appendGroupEvent(ctx, null, GROUP_RECORD_PROBE, { member: m.id, status: out[out.length - 1].status === 'ok' ? 'ok' : 'fail', error: out[out.length - 1].detail || '' });
   }
   return { ok: true, probed: out.length, results: out };
 }

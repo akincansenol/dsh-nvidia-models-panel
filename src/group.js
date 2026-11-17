@@ -589,13 +589,18 @@ export function makeSchema() {
   return { parse: (value) => parseGroupState(value) };
 }
 
-/** 把一条 nvidia-group/* 事件折进投影状态。 */
+// 事件类型名：新版走 harness 官方 plugin record（plugin: 命名空间 + 自动
+// ignorable），旧版遗留 nvidia-group/* 仍需识别以便回放历史会话。
+const PROBE_TYPES = new Set(['nvidia-group/probe', 'plugin:dsh-nvidia-models-panel/probe']);
+const FAILOVER_TYPES = new Set(['nvidia-group/failover', 'plugin:dsh-nvidia-models-panel/failover']);
+
+/** 把一条组事件（新旧类型名）折进投影状态。 */
 export function foldGroupEvent(state, event) {
   const s = parseGroupState(state);
   const type = event && event.type;
   const data = (event && event.data) || {};
   const at = Number.isFinite(event && event.time) ? event.time : Date.now();
-  if (type === 'nvidia-group/failover') {
+  if (FAILOVER_TYPES.has(type)) {
     const from = String(data.from || '');
     const to = String(data.to || '');
     const members = { ...s.members };
@@ -610,7 +615,7 @@ export function foldGroupEvent(state, event) {
     const timeline = s.timeline.concat([{ at, type: 'failover', member: from, to, error: String(data.error || '') }]).slice(-30);
     return { members, timeline };
   }
-  if (type === 'nvidia-group/probe') {
+  if (PROBE_TYPES.has(type)) {
     const id = String(data.member || '');
     if (!id) return s;
     const members = { ...s.members };
