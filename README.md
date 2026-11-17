@@ -72,7 +72,7 @@ git clone https://github.com/windxxf/dsh-nvidia-models-panel.git
 - 零 npm 依赖：全部能力由 Harness 宿主提供，无需构建步骤
 - API Key 保存在各电脑自己的 profile 凭据里，不随仓库/安装包迁移，换机需重新输入
 - 「一键配置」写入当前 profile 的 `cordis.patch.yml`（llm-pi-ai 条目的 `providers.nvidia.models`），可重复点击，每次以最新验证结果为准
-- 需要 DeepSeek Harness ≥ 0.2.1
+- 需要 DeepSeek Harness ≥ 0.2.1-rc.2
 
 ## License
 
