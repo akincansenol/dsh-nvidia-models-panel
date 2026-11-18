@@ -84,6 +84,46 @@ window.__ModuleLoader__.load({
      */
     function DockBadge(props) {
       const [status, setStatus] = useState(null);
+      const btnRef = useRef(null);
+
+      // 运行时实测对齐：dock 槽位容器的真实宽度/缩进由宿主 CSS 决定，静态猜 CSS 变量不可靠。
+      // 直接测量输入框 card 的实际右边缘，动态设置 marginRight 让徽标右边缘与它重合。
+      useEffect(function () {
+        if (!status || !status.active) return;
+        var cancelled = false;
+        function findCard(input) {
+          var el = input;
+          while (el && el !== document.body) {
+            var r = el.getBoundingClientRect();
+            var cs = window.getComputedStyle(el);
+            if (r.width > 400 && r.width <= window.innerWidth - 16 &&
+                parseFloat(cs.borderTopLeftRadius) >= 10) return el;
+            el = el.parentElement;
+          }
+          return null;
+        }
+        function align() {
+          if (cancelled) return;
+          var btn = btnRef.current;
+          var input = document.querySelector('[data-composer-input]');
+          if (!btn || !input) return;
+          var card = findCard(input);
+          if (!card) return;
+          // btn.right = 容器右缘 - marginRight。要让 btn.right 追上 card.right（增量 = card.right - btn.right），
+          // 需把 marginRight 减去同样的增量（marginRight 越大按钮越靠左）。
+          var delta = card.getBoundingClientRect().right - btn.getBoundingClientRect().right;
+          if (Math.abs(delta) >= 1) {
+            var cur = parseFloat(window.getComputedStyle(btn).marginRight) || 0;
+            btn.style.marginRight = (cur - delta) + 'px';
+          }
+        }
+        var n = 0;
+        var raf;
+        function converge() { align(); if (++n < 10) raf = requestAnimationFrame(converge); }
+        converge();
+        var timer = setInterval(align, 2000);
+        return function () { cancelled = true; cancelAnimationFrame(raf); clearInterval(timer); };
+      }, [status && status.active]);
 
       const refresh = useCallback(async function () {
         try {
@@ -120,27 +160,20 @@ window.__ModuleLoader__.load({
         } catch { /* 忽略：面板可能未挂载 */ }
       };
 
-      // 外层 flex 容器：撑满宽度并靠右，把徽标推到输入框右侧
-      // 用 absolute 定位强制右边缘对齐输入框右边缘
+      // dock 容器（._7yHdaG_dock）相对输入框两边各缩进了 2×--dsh-composer-dock-inset：
+      //   max-width = card-max - 2×inset，padding = 0 inset，margin 0 auto
+      // 所以 dock 内容区右边缘比输入框右边缘靠左 2×inset（默认 16px）。
+      // 用 flex-end 靠右后，再给徽标一个负 margin-right = -2×inset 抵消这段缩进，
+      // 右边缘就与输入框右边缘像素级对齐。不用 absolute（外层空 div 高度会塌缩成 0）。
       return h('div', {
         style: {
-          position: 'relative',
+          display: 'flex',
+          justifyContent: 'flex-end',
           width: '100%',
           boxSizing: 'border-box',
         },
-      }, h('div', {
-        style: {
-          position: 'absolute',
-          right: 0,
-          top: 0,
-          bottom: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'flex-end',
-          pointerEvents: 'none', // 让点击穿透到 button
-        },
       }, h('button', {
-        style: { pointerEvents: 'auto' }, // 恢复 button 自己的点击
+        ref: btnRef,
         type: 'button',
         onClick: openUsage,
         title: '查看 NVIDIA 模型组调用日志',
@@ -163,8 +196,9 @@ window.__ModuleLoader__.load({
           height: '32px',
           boxSizing: 'border-box',
           flexShrink: 0,
+          marginRight: 'calc(-2 * var(--dsh-composer-dock-inset, 8px))',
         },
-      }, label)));
+      }, label));
     }
 
     /** 黄色警示条：未配置 Key 时在关键位置提示用户先去保存 Key。 */
