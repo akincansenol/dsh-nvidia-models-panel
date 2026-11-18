@@ -121,14 +121,26 @@ window.__ModuleLoader__.load({
       };
 
       // 外层 flex 容器：撑满宽度并靠右，把徽标推到输入框右侧
+      // 用 absolute 定位强制右边缘对齐输入框右边缘
       return h('div', {
         style: {
-          display: 'flex',
-          justifyContent: 'flex-end',
+          position: 'relative',
           width: '100%',
           boxSizing: 'border-box',
         },
+      }, h('div', {
+        style: {
+          position: 'absolute',
+          right: 0,
+          top: 0,
+          bottom: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          pointerEvents: 'none', // 让点击穿透到 button
+        },
       }, h('button', {
+        style: { pointerEvents: 'auto' }, // 恢复 button 自己的点击
         type: 'button',
         onClick: openUsage,
         title: '查看 NVIDIA 模型组调用日志',
@@ -152,7 +164,7 @@ window.__ModuleLoader__.load({
           boxSizing: 'border-box',
           flexShrink: 0,
         },
-      }, label));
+      }, label)));
     }
 
     /** 黄色警示条：未配置 Key 时在关键位置提示用户先去保存 Key。 */
