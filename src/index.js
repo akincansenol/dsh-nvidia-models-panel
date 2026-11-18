@@ -488,8 +488,44 @@ const NVIDIA_KEY_REF = 'NVIDIA_API_KEY';
  */
 const groupHealth = createHealthRegistry({ failThreshold: 2, baseCooldownMs: 20000, maxCooldownMs: 300000 });
 
+/**
+ * 调用日志持久化文件（放在 profile 目录而非插件目录）：市场重装会替换 node_modules
+ * 里的插件实体目录、放到那里会跟着丢；profile 目录稳定。无 DSH_PROFILE_DIR 时返回空，
+ * 静默降级为纯内存（便于测试与非 DSH 环境）。
+ */
+function defaultUsageFilePath() {
+  const dir = process.env.DSH_PROFILE_DIR;
+  if (!dir) return '';
+  return dir.replace(/\/+$/, '') + '/nvidia-usage.json';
+}
+
+/** 文件型 storage（ESM 用动态 import）：全量快照覆盖写，读写失败一律静默。 */
+function makeFileStorage() {
+  // Never touch the real profile usage file while running under `node --test`
+  // (smoke tests exercise apply()/stream and would otherwise pollute it).
+  if (process.env.NODE_TEST_CONTEXT) return null;
+  const file = defaultUsageFilePath();
+  if (!file) return null;
+  return {
+    async load() {
+      try {
+        const fs = await import('node:fs/promises');
+        return JSON.parse(await fs.readFile(file, 'utf8'));
+      } catch { return null; }
+    },
+    async save(data) {
+      try {
+        const fs = await import('node:fs/promises');
+        const tmp = file + '.tmp';
+        await fs.writeFile(tmp, JSON.stringify(data), 'utf8');
+        await fs.rename(tmp, file); // atomic replace
+      } catch { /* best-effort */ }
+    },
+  };
+}
+
 /** 当日调用用量登记表（进程级单例）：模型组每次尝试都记一条，供面板「调用日志」展示。 */
-const groupUsage = createUsageRegistry({ retentionDays: 7, maxLogPerDay: 200 });
+const groupUsage = createUsageRegistry({ retentionDays: 7, maxLogPerDay: 200, storage: makeFileStorage() });
 
 /** 组运行参数（内存态，可被 setGroupConfig 覆盖）。 */
 const groupConfig = {
@@ -914,6 +950,10 @@ export function apply(ctx) {
   // 反复判失败、推进熔断，重载后如果沿用旧状态，刚修好的成员仍会被跳过。
   // 清零是安全的——真正的上游不可用仍由 FAILOVER 与看板实时探测照常兜底。
   try { groupHealth.reset(); } catch { /* 忽略 */ }
+
+  // 从磁盘读回调用日志快照（重载/重启不丢）。fire-and-forget：hydrate 内部已
+  // 全量 try/catch，失败静默；不阻塞插件激活。
+  try { Promise.resolve(groupUsage.hydrate()).catch(() => {}); } catch { /* 忽略 */ }
 
   // Slash-command handlers run against an agent invocation ({ agent, rawInput }),
   // NOT the plugin context — so both handlers close over the plugin ctx instead.

@@ -49,12 +49,17 @@ function num(value) {
  * @param {() => number} [opts.now] clock (defaults to Date.now)
  * @param {number} [opts.retentionDays] how many day buckets to keep (default 7)
  * @param {number} [opts.maxLogPerDay] rolling log cap per day (default 200)
+ * @param {{load:()=>Promise<any>, save:(data:any)=>Promise<void>}} [opts.storage]
+ *        optional persistence adapter. Without it the registry stays in-memory only.
  */
 export function createUsageRegistry(opts = {}) {
   const clock = typeof opts.now === 'function' ? opts.now : () => Date.now();
   const retentionDays = Number.isFinite(opts.retentionDays) && opts.retentionDays > 0 ? opts.retentionDays : 7;
   const maxLogPerDay =
     Number.isFinite(opts.maxLogPerDay) && opts.maxLogPerDay > 0 ? Math.floor(opts.maxLogPerDay) : 200;
+  const storage = opts.storage && typeof opts.storage.load === 'function' && typeof opts.storage.save === 'function'
+    ? opts.storage
+    : null;
 
   /** @type {Map<string, ReturnType<typeof emptyDay>>} */
   const days = new Map();
@@ -67,6 +72,84 @@ export function createUsageRegistry(opts = {}) {
       days.set(key, day);
     }
     return day;
+  }
+
+  // ---- persistence -------------------------------------------------------
+  // Serialise the whole registry (Map -> plain object) and write a full
+  // snapshot on every change. A serial write chain prevents overlapping
+  // writes from clobbering each other; failures are swallowed so persistence
+  // never breaks the hot failover path.
+  let writeChain = Promise.resolve();
+
+  function serialize() {
+    const out = {};
+    for (const [key, day] of days) {
+      out[key] = {
+        total: { ...day.total },
+        members: Object.fromEntries(day.members),
+        log: day.log.slice(),
+      };
+    }
+    return { version: 1, days: out };
+  }
+
+  function deserialize(data) {
+    if (!data || typeof data !== 'object' || !data.days || typeof data.days !== 'object') return;
+    for (const [key, raw] of Object.entries(data.days)) {
+      if (typeof key !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(key) || !raw || typeof raw !== 'object') continue;
+      const day = emptyDay();
+      if (raw.total && typeof raw.total === 'object') {
+        const t = day.total;
+        for (const k of Object.keys(t)) t[k] = num(raw.total[k]);
+      }
+      if (raw.members && typeof raw.members === 'object') {
+        for (const [id, m] of Object.entries(raw.members)) {
+          if (!m || typeof m !== 'object') continue;
+          const clean = emptyMember();
+          for (const k of Object.keys(clean)) clean[k] = k === 'lastError' ? String(m[k] || '') : num(m[k]);
+          day.members.set(id, clean);
+        }
+      }
+      if (Array.isArray(raw.log)) {
+        day.log = raw.log.slice(-maxLogPerDay).map((e) => ({
+          at: num(e && e.at),
+          memberId: String((e && e.memberId) || 'unknown'),
+          ok: !!(e && e.ok),
+          failover: !!(e && e.failover),
+          failoverFrom: String((e && e.failoverFrom) || ''),
+          firstByteMs: num(e && e.firstByteMs),
+          elapsedMs: num(e && e.elapsedMs),
+          inputTokens: num(e && e.inputTokens),
+          outputTokens: num(e && e.outputTokens),
+          error: String((e && e.error) || ''),
+        }));
+      }
+      days.set(key, day);
+    }
+  }
+
+  function persist() {
+    if (!storage) return;
+    writeChain = writeChain.then(async () => {
+      try {
+        prune();
+        await storage.save(serialize());
+      } catch {
+        // Persistence is best-effort; in-memory stats remain authoritative.
+      }
+    });
+  }
+
+  /** Load a previously persisted snapshot into memory (best-effort). */
+  async function hydrate() {
+    if (!storage) return;
+    try {
+      const data = await storage.load();
+      if (data != null) deserialize(data);
+      prune();
+    } catch {
+      // Corrupt / missing storage: start fresh, never throw into apply().
+    }
   }
 
   function prune() {
@@ -150,6 +233,7 @@ export function createUsageRegistry(opts = {}) {
     if (day.log.length > maxLogPerDay) {
       day.log.splice(0, day.log.length - maxLogPerDay);
     }
+    persist();
     return logEntry;
   }
 
@@ -189,6 +273,7 @@ export function createUsageRegistry(opts = {}) {
     } else {
       days.clear();
     }
+    persist();
   }
 
   /** List the day keys currently retained (newest last). */
@@ -196,5 +281,5 @@ export function createUsageRegistry(opts = {}) {
     return [...days.keys()].sort();
   }
 
-  return { record, snapshot, reset, prune, days: days_ };
+  return { record, snapshot, reset, prune, days: days_, hydrate, serialize, deserialize };
 }

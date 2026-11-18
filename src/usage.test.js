@@ -92,3 +92,74 @@ test('prune drops buckets older than retentionDays', () => {
   reg.prune();
   assert.deepEqual(reg.days(), []);
 });
+
+// ---- persistence ---------------------------------------------------------
+function memStorage() {
+  let blob = null;
+  return {
+    async load() { return blob; },
+    async save(data) { blob = JSON.parse(JSON.stringify(data)); },
+    peek() { return blob; },
+    set raw(v) { blob = v; },
+  };
+}
+
+test('hydrate restores a persisted snapshot into a fresh registry', async () => {
+  const storage = memStorage();
+  const reg1 = createUsageRegistry({ now: () => FIXED, storage });
+  reg1.record({ memberId: 'a', ok: true, firstByteMs: 200, inputTokens: 100, outputTokens: 40 });
+  reg1.record({ memberId: 'b', ok: false, failover: true, failoverFrom: 'a', error: 'boom' });
+  // persist() is queued on a promise chain; let it flush.
+  await new Promise((r) => setTimeout(r, 0));
+  assert.ok(storage.peek(), 'storage should hold a snapshot');
+
+  const reg2 = createUsageRegistry({ now: () => FIXED, storage });
+  await reg2.hydrate();
+  const s = reg2.snapshot();
+  assert.equal(s.total.calls, 2);
+  assert.equal(s.total.ok, 1);
+  assert.equal(s.total.fail, 1);
+  assert.equal(s.total.failovers, 1);
+  assert.equal(s.total.inputTokens, 100);
+  const a = s.members.find((m) => m.id === 'a');
+  assert.equal(a.avgFirstByteMs, 200);
+  assert.equal(s.log[0].memberId, 'b');
+  assert.equal(s.log[0].failoverFrom, 'a');
+});
+
+test('reset persists the cleared state (no zombie logs after reload)', async () => {
+  const storage = memStorage();
+  const reg = createUsageRegistry({ now: () => FIXED, storage });
+  reg.record({ memberId: 'a', ok: true });
+  await new Promise((r) => setTimeout(r, 0));
+  reg.reset();
+  await new Promise((r) => setTimeout(r, 0));
+
+  const reg2 = createUsageRegistry({ now: () => FIXED, storage });
+  await reg2.hydrate();
+  assert.equal(reg2.snapshot().total.calls, 0);
+});
+
+test('hydrate survives corrupt / missing storage', async () => {
+  const storage = memStorage();
+  storage.raw = '{not valid json';
+  const reg = createUsageRegistry({ now: () => FIXED, storage });
+  await reg.hydrate(); // must not throw
+  assert.equal(reg.snapshot().total.calls, 0);
+  reg.record({ memberId: 'a', ok: true }); // still works in memory
+  assert.equal(reg.snapshot().total.calls, 1);
+});
+
+test('hydrate prunes expired buckets loaded from disk', async () => {
+  let clock = FIXED;
+  const storage = memStorage();
+  const reg1 = createUsageRegistry({ now: () => clock, storage, retentionDays: 2 });
+  reg1.record({ memberId: 'a', ok: true }); // 2026-11-16
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(Object.keys(storage.peek().days), ['2026-11-16']);
+
+  clock = new Date(2026, 10, 20, 9, 0, 0).getTime(); // 4 days later
+  const reg2 = createUsageRegistry({ now: () => clock, storage, retentionDays: 2 });
+  await reg2.hydrate();
+  assert.deepEqual(reg2.days(), []);
+});
