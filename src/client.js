@@ -125,12 +125,13 @@ window.__ModuleLoader__.load({
         return function () { cancelled = true; cancelAnimationFrame(raf); clearInterval(timer); };
       }, [status && status.active]);
 
+      const sessionId = props && props.sessionId;
       const refresh = useCallback(async function () {
         try {
           const response = await fetch('/api/nvidia-models', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ action: 'dockStatus' }),
+            body: JSON.stringify({ action: 'dockStatus', sessionId: sessionId || undefined }),
           });
           if (!response.ok) return;
           const data = await response.json();
@@ -138,7 +139,7 @@ window.__ModuleLoader__.load({
         } catch {
           // best-effort
         }
-      }, []);
+      }, [sessionId]);
 
       useEffect(function () {
         refresh();
@@ -1212,6 +1213,7 @@ window.__ModuleLoader__.load({
             name: 'conversation.input.dock',
             id: 'nvidia-group-status',
             order: 10,
+            inject: function (sessionId) { return { sessionId: sessionId }; },
           }, DockBadge);
         });
       },

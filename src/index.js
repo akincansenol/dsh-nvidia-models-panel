@@ -833,15 +833,28 @@ async function groupStatusSnapshot(ctx) {
 }
 
 /** 输入框 dock 徽标状态：当前实际出正文的模型 + 切换/熔断计数。 */
-async function dockStatusSnapshot(ctx) {
+async function dockStatusSnapshot(ctx, sessionId) {
   const members = (await resolveGroupMembers(ctx)) || [];
   const cooling = members.filter((m) => groupHealth.cooldownRemainingMs(m.id) > 0).length;
   // 「刚切换」提示保留 6 秒，之后回落到常态绿色。
   const SWITCH_NOTICE_MS = 6000;
   const justSwitched = Boolean(dockGroupState.switchFrom) && (Date.now() - dockGroupState.switchAt < SWITCH_NOTICE_MS);
+  // 当前会话已切到别的模型时隐藏徽标：读会话最新 request/header 的 provider。
+  // best-effort：读不到 header 时保持原逻辑，避免误隐藏。
+  let currentProvider = '';
+  try {
+    const session = sessionFor(ctx, sessionId);
+    const header = session && typeof session.requestHeader === 'function' ? session.requestHeader() : null;
+    if (header && header.config && typeof header.config.provider === 'string') {
+      currentProvider = header.config.provider;
+    }
+  } catch {
+    currentProvider = '';
+  }
+  const usingGroup = !currentProvider || currentProvider === 'nvidia-group';
   return {
     ok: true,
-    active: Boolean(dockGroupState.memberName),
+    active: Boolean(dockGroupState.memberName) && usingGroup,
     memberName: dockGroupState.memberName || '',
     memberId: dockGroupState.memberId || '',
     switchFrom: justSwitched ? dockGroupState.switchFrom : '',
@@ -956,7 +969,7 @@ function createNvidiaModelsRoute(ctx) {
       } else if (action === 'checkUpdate') {
         result = await checkUpdate(ctx);
       } else if (action === 'dockStatus') {
-        result = await dockStatusSnapshot(ctx);
+        result = await dockStatusSnapshot(ctx, body.sessionId);
       } else {
         result = await detectNvidiaModels();
         if (result && result.source === 'live') lastDetectedModels = normalizeGroupMembers(result.models);

@@ -6,15 +6,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as plugin from './index.js';
 
-function makeSession() {
+function makeSession(provider) {
   const events = [];
-  return { events, append(type, data) { events.push({ type, data }); return { type, data }; } };
+  const session = { events, append(type, data) { events.push({ type, data }); return { type, data }; } };
+  if (provider) session.requestHeader = function () { return { config: { provider: provider, model: 'x', maxTokens: 8192 } }; };
+  return session;
 }
 
 function makeCtx(opts = {}) {
   const sessions = new Map();
   const sid = 'sess-1';
-  sessions.set(sid, makeSession());
+  sessions.set(sid, makeSession(opts.currentProvider));
   const registered = { commands: [], routes: [], adapters: new Map(), projections: [] };
   const nvidiaModels = opts.nvidiaModels || [
     { id: 'nvidia/nemotron-3.5-lightning-30b-a3b', name: 'L', description: 'd', input: ['text'], contextWindow: 131072, maxTokens: 8192 },
@@ -164,6 +166,37 @@ test('route action dockStatus reflects the model that actually produced text + f
   assert.ok(after.memberName && after.memberName.length > 0);
   assert.equal(typeof after.switchCount, 'number');
   assert.equal(typeof after.cooldownCount, 'number');
+
+  // 当前会话仍使用 nvidia-group：徽标保持可见。
+  const withGroup = await (await route.fetch(mk({ action: 'dockStatus', sessionId: sid }))).json();
+  assert.equal(withGroup.active, true, 'stays visible while session uses nvidia-group');
+});
+
+test('dock badge hides once the session switches to a non-nvidia-group model', async () => {
+  const { ctx, registered, sid, services } = makeCtx();
+  plugin.apply(ctx);
+  const route = registered.routes[0].route;
+  const adapter = registered.adapters.get('nvidia-group');
+  const mk = (obj) => ({ body: { getReader() { let done = false; const b = new TextEncoder().encode(JSON.stringify(obj)); return { async read() { if (done) return { done: true }; done = true; return { done: false, value: b }; }, async cancel() {} }; } } });
+
+  // Produce text with the group so dockGroupState becomes active.
+  const prepared = await adapter.prepareCall('nvidia-group', 'nvidia/nemotron-3.5-lightning-30b-a3b');
+  for await (const _ of prepared.stream({ model: 'nvidia/nemotron-3.5-lightning-30b-a3b', messages: [], sessionId: sid })) { /* drain */ }
+  const active = await (await route.fetch(mk({ action: 'dockStatus', sessionId: sid }))).json();
+  assert.equal(active.active, true, 'active with no header info (best-effort)');
+
+  // Now the session's latest header says a different provider -> badge hides.
+  services.sessions.get(sid).requestHeader = function () {
+    return { config: { provider: 'workbuddy-models', model: 'deepseek-v4.1-flash', maxTokens: 8192 } };
+  };
+  const hidden = await (await route.fetch(mk({ action: 'dockStatus', sessionId: sid }))).json();
+  assert.equal(hidden.active, false, 'hidden after switching away from nvidia-group');
+  // The underlying state is intact, so switching back re-shows it.
+  services.sessions.get(sid).requestHeader = function () {
+    return { config: { provider: 'nvidia-group', model: '__auto__', maxTokens: 8192 } };
+  };
+  const reshown = await (await route.fetch(mk({ action: 'dockStatus', sessionId: sid }))).json();
+  assert.equal(reshown.active, true, 're-shown after switching back');
 });
 
 test('route action setGroupConfig clamps firstByteTimeoutMs', async () => {
