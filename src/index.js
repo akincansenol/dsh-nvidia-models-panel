@@ -134,6 +134,13 @@ function withCredentials(ctx, operation) {
   });
 }
 
+/** NVIDIA Key 是否已配置（凭据服务不可用时按「已配置」处理，避免误拦截）。 */
+async function hasNvidiaKey(ctx) {
+  const info = await withCredentials(ctx, (credentials) => credentials.describe(NVIDIA_KEY_REF));
+  if (!info || info.unavailable) return true; // 无法判定时不拦截，交给上游返回真实错误
+  return Boolean(info.configured);
+}
+
 /** Run one operation against the configEditor service; resolves null when unavailable. */
 function withConfigEditor(ctx, operation) {
   return new Promise((done) => {
@@ -676,6 +683,54 @@ function appendGroupEvent(ctx, sessionId, type, data) {
   }
 }
 
+/** 没有 Key / 凭据失效时给出的统一可读提示。 */
+const NO_KEY_MESSAGE = 'NVIDIA API Key 未配置或已失效，请在 NVIDIA 模型面板顶部保存 Key 后重试。';
+
+/**
+ * 包装 llm.stream：把上游的「缺凭据 / 401 / 403」错误翻译成带 NO_API_KEY 码的
+ * 友好失败。这类错误对所有成员都一样，group.js 会识别为致命错误直接停止故障转移。
+ */
+function translateKeyError(failure) {
+  if (!failure || typeof failure !== 'object') return failure;
+  const code = String(failure.code || '');
+  const status = failure.status;
+  const msg = String(failure.message || '');
+  const isKeyIssue = code === 'MISSING_CREDENTIAL' || code === 'NO_API_KEY'
+    || status === 401 || status === 403
+    || /api.?key|credential|unauthoriz|authentication|invalid.?token/i.test(msg);
+  if (!isKeyIssue) return failure;
+  return { code: 'NO_API_KEY', message: NO_KEY_MESSAGE, status };
+}
+
+function streamChildWithFriendlyKeyErrors(llm, childOptions) {
+  const source = llm.stream(childOptions);
+  return (async function* () {
+    try {
+      for await (const chunk of source) {
+        // finish error 块：翻译其 failure。
+        if (chunk && chunk.type === 'finish' && chunk.reason && (chunk.reason.kind === 'error' || chunk.reason.kind === 'aborted')) {
+          const failure = translateKeyError(chunk.reason.failure);
+          if (failure !== chunk.reason.failure) {
+            yield { ...chunk, reason: { ...chunk.reason, failure } };
+            continue;
+          }
+        }
+        yield chunk;
+      }
+    } catch (error) {
+      // 抛出的错误里也可能是缺凭据。
+      const failure = translateKeyError(error && typeof error === 'object'
+        ? { code: error.code, status: error.status, message: error.message }
+        : { message: String(error) });
+      if (failure && failure.code === 'NO_API_KEY') {
+        yield { type: 'finish', reason: { kind: 'error', failure } };
+      } else {
+        throw error;
+      }
+    }
+  })();
+}
+
 /** 构造“模型组”适配器：内部按健康度顺序把请求转给真正的 nvidia 路由。 */
 function buildGroupAdapter(ctx, llm) {
   return createGroupAdapter({
@@ -686,7 +741,9 @@ function buildGroupAdapter(ctx, llm) {
       return members;
     },
     // 用注入到的 llm 服务实例直接调用（外层 ctx 未声明注入 llm，不能在请求时访问 ctx.llm）。
-    streamChild: (childOptions) => llm.stream(childOptions),
+    // 同时把「没有 Key / 凭据失效」的上游错误翻译成可读提示——这种错误对所有成员都一样，
+    // 由 group.js 识别为致命错误直接停止故障转移，避免无谓地逐个重试。
+    streamChild: (childOptions) => streamChildWithFriendlyKeyErrors(llm, childOptions),
     health: groupHealth,
     firstByteTimeoutMs: () => groupConfig.firstByteTimeoutMs,
     firstTextTimeoutMs: () => groupConfig.firstTextTimeoutMs,
@@ -829,7 +886,12 @@ function createNvidiaModelsRoute(ctx) {
       const body = await readJsonBody(request);
       const action = body && typeof body.action === 'string' ? body.action : 'detect';
       let result;
-      if (action === 'test' && typeof body.model === 'string' && body.model) {
+      // 需要 Key 的 action 在没有配置 Key 时统一早退，给出一致的可读提示。
+      // keyStatus/setKey/clearKey/resetGroup/resetUsage/checkUpdate 不拦（它们本就用于修复无 Key 状态）。
+      const NEED_KEY_ACTIONS = new Set(['detect', 'test', 'configure', 'probeGroup', 'groupStatus', 'dockStatus', 'usageStats']);
+      if (NEED_KEY_ACTIONS.has(action) && !(await hasNvidiaKey(ctx))) {
+        result = { ok: false, code: 'NO_API_KEY', message: '未配置 NVIDIA API Key，请先在面板上方保存后再继续。' };
+      } else if (action === 'test' && typeof body.model === 'string' && body.model) {
         result = await testNvidiaModel(body.model);
       } else if (action === 'keyStatus') {
         const info = await withCredentials(ctx, (credentials) => credentials.describe(NVIDIA_KEY_REF));

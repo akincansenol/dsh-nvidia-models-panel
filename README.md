@@ -39,6 +39,8 @@ git clone https://github.com/windxxf/dsh-nvidia-models-panel.git
 3. 点击「检测」获取可用模型列表 → 「验证」逐个试调用
 4. 点击「一键配置」，试调用通过的模型即写入 nvidia 供应商目录，可在对话模型选择器中直接选用
 
+> **未配置 Key 时**：面板顶部会显示黄色提示条，API Key 卡片给出提醒，「检测 / 逐个试调用 / 一键配置」按钮会置灰并给出悬浮说明；此时在对话框里选「NVIDIA 模型组（自动）」也会立即收到「NVIDIA API Key 未配置或已失效，请在 NVIDIA 模型面板顶部保存 Key 后重试」的明确报错，而不是对组内每个模型逐个超时重试。保存 Key 后一切自动恢复。
+
 ## NVIDIA 模型组（自动切换 / 自愈）
 
 除了单个模型，插件还注册了一个虚拟供应商 **「NVIDIA 模型组」**（provider id `nvidia-group`）。

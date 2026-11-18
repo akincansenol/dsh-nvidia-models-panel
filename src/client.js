@@ -144,6 +144,21 @@ window.__ModuleLoader__.load({
       }, label);
     }
 
+    /** 黄色警示条：未配置 Key 时在关键位置提示用户先去保存 Key。 */
+    function noKeyWarning(message) {
+      return h('div', {
+        style: {
+          padding: '8px 10px',
+          background: 'rgba(230,150,0,0.12)',
+          border: '1px solid rgba(230,150,0,0.55)',
+          borderRadius: '6px',
+          fontSize: '12px',
+          lineHeight: 1.5,
+          color: '#b8860b',
+        },
+      }, message);
+    }
+
     function NvidiaModelsPanel(props) {
       const [models, setModels] = useState([]);
       const [detecting, setDetecting] = useState(false);
@@ -774,6 +789,10 @@ window.__ModuleLoader__.load({
         )
       );
 
+      // 未配置 Key：主操作按钮禁用、关键位置给出就地提示（凭据服务不可用时不做拦截）。
+      const noKey = Boolean(keyStatus && !keyStatus.configured && !keyStatus.unavailable);
+      const keyHint = '尚未配置 NVIDIA API Key —— 请先在上方「NVIDIA API Key」卡片粘贴保存后再继续。';
+
       return h('div', {
         className: 'nvidia-models-panel',
         style: {
@@ -962,8 +981,11 @@ window.__ModuleLoader__.load({
           ),
           h('p', { style: { margin: 0, fontSize: '11px', opacity: 0.65, lineHeight: 1.5 } },
             'Key 保存在 Harness 凭据存储（与正式 nvidia 模型路由共用 NVIDIA_API_KEY 引用），不会写入配置文件或日志；保存后下一次请求立即生效。'),
+          noKey ? h('p', { style: { margin: 0, fontSize: '12px', lineHeight: 1.5, color: '#b8860b' } },
+            '⚠ 未配置 Key：检测、试调用与「模型组」都不可用，请先在上方保存 Key。') : null,
           keyMsg ? h('p', { style: { margin: 0, fontSize: '12px', lineHeight: 1.5 } }, keyMsg) : null,
         ),
+        noKey ? noKeyWarning(keyHint) : null,
         tabBar,
         tab === 'models' ? h('div', {
           key: 'modelsPane',
@@ -976,7 +998,8 @@ window.__ModuleLoader__.load({
         },
           h('button', {
             onClick: detectModels,
-            disabled: detecting || verifying,
+            disabled: detecting || verifying || noKey,
+            title: noKey ? keyHint : undefined,
             style: {
               padding: '7px 14px',
               fontSize: '13px',
@@ -985,13 +1008,14 @@ window.__ModuleLoader__.load({
               color: '#ffffff',
               border: 'none',
               borderRadius: '6px',
-              cursor: (detecting || verifying) ? 'wait' : 'pointer',
-              opacity: (detecting || verifying) ? 0.6 : 1,
+              cursor: (detecting || verifying || noKey) ? 'not-allowed' : 'pointer',
+              opacity: (detecting || verifying || noKey) ? 0.6 : 1,
             },
           }, detecting ? '检测中…' : '检测可用模型'),
           h('button', {
             onClick: verifyAll,
-            disabled: detecting || verifying || models.length === 0,
+            disabled: detecting || verifying || models.length === 0 || noKey,
+            title: noKey ? keyHint : undefined,
             style: {
               padding: '7px 14px',
               fontSize: '13px',
@@ -1000,7 +1024,8 @@ window.__ModuleLoader__.load({
               color: '#ffffff',
               border: 'none',
               borderRadius: '6px',
-              cursor: (detecting || verifying || models.length === 0) ? 'wait' : 'pointer',
+              cursor: (detecting || verifying || models.length === 0 || noKey) ? 'not-allowed' : 'pointer',
+              opacity: noKey ? 0.6 : 1,
             },
           }, verifying ? '试调用中…' : '逐个试调用'),
           verifying ? h('button', {
@@ -1018,7 +1043,8 @@ window.__ModuleLoader__.load({
           }, '停止') : null,
           h('button', {
             onClick: configureModels,
-            disabled: configuring || detecting || verifying,
+            disabled: configuring || detecting || verifying || noKey,
+            title: noKey ? keyHint : undefined,
             style: {
               padding: '7px 14px',
               fontSize: '13px',
@@ -1026,8 +1052,8 @@ window.__ModuleLoader__.load({
               color: 'inherit',
               border: '1px solid rgba(128,128,128,0.4)',
               borderRadius: '6px',
-              cursor: (configuring || detecting || verifying) ? 'wait' : 'pointer',
-              opacity: (configuring || detecting || verifying) ? 0.6 : 1,
+              cursor: (configuring || detecting || verifying || noKey) ? 'not-allowed' : 'pointer',
+              opacity: (configuring || detecting || verifying || noKey) ? 0.6 : 1,
             },
           }, configuring ? '配置中…' : '一键配置到设置')
         ),

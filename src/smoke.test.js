@@ -48,7 +48,9 @@ function makeCtx(opts = {}) {
     sessionProjections: { register(def) { registered.projections.push(def); return { dispose() {} }; } },
     credentials: {
       async resolve() { return { value: 'nvapi-test' }; },
-      async describe() { return { configured: true, source: 'stored', writable: true }; },
+      async describe() { return opts.keyConfigured === false
+        ? { configured: false, source: null, writable: true }
+        : { configured: true, source: 'stored', writable: true }; },
       async set() {}, async unset() {},
     },
     sessions: { get(id) { return sessions.get(id) || null; } },
@@ -183,6 +185,48 @@ test('route action resetGroup works', async () => {
   const request = { body: { getReader() { let done = false; return { async read() { if (done) return { done: true }; done = true; return { done: false, value: new TextEncoder().encode(body) }; }, async cancel() {} }; } } };
   const data = await (await route.fetch(request)).json();
   assert.equal(data.ok, true);
+});
+
+test('route actions that need a key early-return NO_API_KEY when no key configured', async () => {
+  const mk = (obj) => ({ body: { getReader() { let done = false; const b = new TextEncoder().encode(JSON.stringify(obj)); return { async read() { if (done) return { done: true }; done = true; return { done: false, value: b }; }, async cancel() {} }; } } });
+  const mc = makeCtx({ keyConfigured: false });
+  plugin.apply(mc.ctx);
+  const route = mc.registered.routes[0].route;
+
+  // 需要 Key 的 action 全部早退，并给出一致的 NO_API_KEY 提示。
+  for (const action of ['detect', 'test', 'configure', 'probeGroup', 'groupStatus', 'dockStatus', 'usageStats']) {
+    const data = await (await route.fetch(mk({ action }))).json();
+    assert.equal(data.code, 'NO_API_KEY', action + ' should be blocked');
+    assert.equal(data.ok, false);
+    assert.match(data.message, /NVIDIA API Key/);
+  }
+
+  // 不依赖 Key 的 action 仍然可用。
+  const keyStatus = await (await route.fetch(mk({ action: 'keyStatus' }))).json();
+  assert.equal(keyStatus.configured, false);
+  const update = await (await route.fetch(mk({ action: 'checkUpdate' }))).json();
+  assert.ok(update && typeof update === 'object');
+  mc.services.llm.stream = () => (async function* () { yield { type: 'finish', reason: { kind: 'stop' } }; })();
+});
+
+test('adapter turns a missing-credential upstream failure into a fatal NO_API_KEY finish (no failover)', async () => {
+  const mc = makeCtx();
+  let streamCalls = 0;
+  mc.services.llm.stream = () => { streamCalls += 1; return (async function* () {
+    yield { type: 'finish', reason: { kind: 'error', failure: { code: 'MISSING_CREDENTIAL', message: 'missing credential' } } };
+  })(); };
+  plugin.apply(mc.ctx);
+  const adapter = mc.registered.adapters.get('nvidia-group');
+  const prepared = await adapter.prepareCall('nvidia-group', '__auto__');
+  const chunks = [];
+  for await (const c of prepared.stream({ model: '__auto__', messages: [], sessionId: mc.sid })) chunks.push(c);
+  const finish = chunks[chunks.length - 1];
+  assert.equal(finish.type, 'finish');
+  assert.equal(finish.reason.kind, 'error');
+  assert.equal(finish.reason.failure.code, 'NO_API_KEY');
+  assert.match(finish.reason.failure.message, /API Key/);
+  // 致命错误不应逐个成员重试：只尝试了 1 次。
+  assert.equal(streamCalls, 1, 'fatal key error must not fail over across members');
 });
 
 test('disposer is idempotent and resets resolver', () => {

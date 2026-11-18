@@ -27,6 +27,14 @@ export function isAutoMemberId(id) {
  * 而非「该模型不可用」。这类失败应当直接换下一个成员，
  * 且不计入熔断（模型本身是好的，只是不适合这次请求）。
  */
+/**
+ * 致命失败：对所有组员都一样，换模型也不会好转，因此应立即停止故障转移。
+ * 目前仅「缺 API Key / 凭据失效」属于此类。
+ */
+export function isFatalFailure(failure) {
+  return Boolean(failure && typeof failure === 'object' && failure.code === 'NO_API_KEY');
+}
+
 export function isCapabilityMismatch(failure) {
   if (!failure || typeof failure !== 'object') return false;
   if (failure.code === 'CONTEXT_WINDOW_EXCEEDED' || failure.code === 'MODEL_SWITCH_COMPACTION_FAILED' || failure.code === 'INVALID_REQUEST') {
@@ -373,6 +381,14 @@ export async function* runFailover(options, deps) {
       }
 
       lastFailure = failure;
+      // 致命错误（如缺 API Key）：对所有成员都一样，换模型无用——立即停止，如实把友好提示交给用户。
+      if (isFatalFailure(failure)) {
+        if (typeof deps.onAttempt === 'function') {
+          try { deps.onAttempt({ member, error: failure, emitted, sessionId, firstByteMs, elapsedMs: Date.now() - startedAt, usage: null, fatal: true }); } catch { /* 忽略 */ }
+        }
+        yield { type: 'finish', reason: { kind: 'error', failure: toFailure(failure) } };
+        return;
+      }
       // 「能力不符 / 空回答 / 首段正文超时」不是模型“坏了”，而是这次请求不称职：不记熔断，直接换下一个成员。
       const capability = isCapabilityMismatch(failure) || failure.code === 'EMPTY_ANSWER' || failure.code === 'FIRST_TEXT_TIMEOUT';
       if (!capability && health && typeof health.recordFailure === 'function') health.recordFailure(member.id, failure);
