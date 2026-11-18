@@ -120,7 +120,15 @@ window.__ModuleLoader__.load({
         } catch { /* 忽略：面板可能未挂载 */ }
       };
 
-      return h('button', {
+      // 外层 flex 容器：撑满宽度并靠右，把徽标推到输入框右侧
+      return h('div', {
+        style: {
+          display: 'flex',
+          justifyContent: 'flex-end',
+          width: '100%',
+          boxSizing: 'border-box',
+        },
+      }, h('button', {
         type: 'button',
         onClick: openUsage,
         title: '查看 NVIDIA 模型组调用日志',
@@ -144,7 +152,7 @@ window.__ModuleLoader__.load({
           boxSizing: 'border-box',
           flexShrink: 0,
         },
-      }, label);
+      }, label));
     }
 
     /** 黄色警示条：未配置 Key 时在关键位置提示用户先去保存 Key。 */
