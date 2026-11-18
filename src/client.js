@@ -77,6 +77,73 @@ window.__ModuleLoader__.load({
       }, s.t);
     }
 
+    /**
+     * 输入框 dock 徽标：显示模型组最近真正出正文的模型 + 切换/熔断计数。
+     * 独立 React 树，自己轮询 /api/nvidia-models 的 dockStatus（3 秒一次）。
+     * 未使用模型组时（active=false）完全不渲染，平时不打扰。
+     */
+    function DockBadge(props) {
+      const [status, setStatus] = useState(null);
+
+      const refresh = useCallback(async function () {
+        try {
+          const response = await fetch('/api/nvidia-models', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ action: 'dockStatus' }),
+          });
+          if (!response.ok) return;
+          const data = await response.json();
+          if (data && data.ok) setStatus(data);
+        } catch {
+          // best-effort
+        }
+      }, []);
+
+      useEffect(function () {
+        refresh();
+        const id = setInterval(refresh, 3000);
+        return function () { clearInterval(id); };
+      }, [refresh]);
+
+      if (!status || !status.active) return null;
+
+      const name = status.memberName || status.memberId || '模型组';
+      const justSwitched = Boolean(status.switchFrom);
+      const label = justSwitched
+        ? ('⚡ ' + name + ' ← 从 ' + status.switchFrom + ' 切换 · 切换 ' + status.switchCount + ' 次')
+        : ('⚡ ' + name + ' · 切换 ' + status.switchCount + ' 次 · 熔断 ' + status.cooldownCount);
+
+      const openUsage = function () {
+        try {
+          window.dispatchEvent(new CustomEvent('nvidia-models-open-usage'));
+        } catch { /* 忽略：面板可能未挂载 */ }
+      };
+
+      return h('button', {
+        type: 'button',
+        onClick: openUsage,
+        title: '查看 NVIDIA 模型组调用日志',
+        style: {
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px',
+          fontSize: '11px',
+          lineHeight: '1.2',
+          color: justSwitched ? '#e65100' : '#8fce00',
+          border: '1px solid ' + (justSwitched ? 'rgba(230,81,0,0.55)' : 'rgba(143,206,0,0.5)'),
+          background: justSwitched ? 'rgba(230,81,0,0.10)' : 'rgba(143,206,0,0.08)',
+          borderRadius: '999px',
+          padding: '2px 8px',
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+          maxWidth: '420px',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        },
+      }, label);
+    }
+
     function NvidiaModelsPanel(props) {
       const [models, setModels] = useState([]);
       const [detecting, setDetecting] = useState(false);
@@ -478,6 +545,17 @@ window.__ModuleLoader__.load({
 
       // Check once on mount.
       useEffect(function () { refreshUpdateCheck(); }, [refreshUpdateCheck]);
+
+      // 输入框 dock 徽标点击后，切到「调用日志」标签页。
+      useEffect(function () {
+        function onOpenUsage() { setTab('usage'); }
+        try {
+          window.addEventListener('nvidia-models-open-usage', onOpenUsage);
+          return function () { window.removeEventListener('nvidia-models-open-usage', onOpenUsage); };
+        } catch {
+          return undefined;
+        }
+      }, []);
 
       // Refresh when the user switches to the usage tab.
       useEffect(function () {
@@ -1043,6 +1121,15 @@ window.__ModuleLoader__.load({
             name: 'main',
             key: panelId,
           }, NvidiaModelsPanel);
+        });
+
+        // 对话输入框上方的 dock 徽标：order 10 位于待办(0)与队列(20)之间。
+        ctx.slots.inject('conversation.input.dock', function () {
+          return ctx.slots.register({
+            name: 'conversation.input.dock',
+            id: 'nvidia-group-status',
+            order: 10,
+          }, DockBadge);
         });
       },
     };

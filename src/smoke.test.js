@@ -141,6 +141,29 @@ test('route action groupStatus returns members + health', async () => {
   assert.ok(data.config.firstByteTimeoutMs >= 1000);
 });
 
+test('route action dockStatus reflects the model that actually produced text + failover count', async () => {
+  const { ctx, registered, sid } = makeCtx();
+  plugin.apply(ctx);
+  const route = registered.routes[0].route;
+  const adapter = registered.adapters.get('nvidia-group');
+  const mk = (obj) => ({ body: { getReader() { let done = false; const b = new TextEncoder().encode(JSON.stringify(obj)); return { async read() { if (done) return { done: true }; done = true; return { done: false, value: b }; }, async cancel() {} }; } } });
+
+  // Before any use, the badge is inactive (module state reset on apply()).
+  const before = await (await route.fetch(mk({ action: 'dockStatus' }))).json();
+  assert.equal(before.ok, true);
+  assert.equal(before.active, false);
+
+  // A successful stream that emits visible text should mark the member as active.
+  const prepared = await adapter.prepareCall('nvidia-group', 'nvidia/nemotron-3.5-lightning-30b-a3b');
+  for await (const _ of prepared.stream({ model: 'nvidia/nemotron-3.5-lightning-30b-a3b', messages: [], sessionId: sid })) { /* drain */ }
+  const after = await (await route.fetch(mk({ action: 'dockStatus' }))).json();
+  assert.equal(after.active, true);
+  assert.equal(after.memberId, 'nvidia/nemotron-3.5-lightning-30b-a3b');
+  assert.ok(after.memberName && after.memberName.length > 0);
+  assert.equal(typeof after.switchCount, 'number');
+  assert.equal(typeof after.cooldownCount, 'number');
+});
+
 test('route action setGroupConfig clamps firstByteTimeoutMs', async () => {
   const { ctx, registered } = makeCtx();
   plugin.apply(ctx);

@@ -536,6 +536,30 @@ const groupConfig = {
 };
 
 /**
+ * 输入框 dock 徽标的共享状态（进程级内存，重启归零）。
+ * 记录最近一次真正产出正文的成员、最近一次切换来源/时间、累计切换次数，
+ * 由 buildGroupAdapter 的 onAttempt / onFailover 更新，route `dockStatus` 暴露给 client。
+ */
+const dockGroupState = {
+  sessionId: null,
+  memberId: '',
+  memberName: '',
+  switchFrom: '',
+  switchAt: 0,
+  switchCount: 0,
+  updatedAt: 0,
+};
+
+/** 成员的短友好名（优先配置里的 name，否则取 id 最后一段）。 */
+function friendlyMemberName(member) {
+  if (!member) return '';
+  if (member.name) return String(member.name);
+  const id = String(member.id || '');
+  const tail = id.split('/').pop();
+  return tail || id;
+}
+
+/**
  * 自动发现：最近一次实时检测到的模型（面板点「检测」、configure 成功或后台自动刷新时更新）。
  * 组成员解析顺序：已配置模型 → 最近检测到的对话模型 → 内置种子。
  */
@@ -667,6 +691,14 @@ function buildGroupAdapter(ctx, llm) {
     firstByteTimeoutMs: () => groupConfig.firstByteTimeoutMs,
     firstTextTimeoutMs: () => groupConfig.firstTextTimeoutMs,
     onAttempt: (info) => {
+      // dock 徽标：只在「真正产出正文」的成功尝试里更新当前模型名。
+      // info.error 为空且 info.emitted 为真代表该成员给出了可见正文（而非纯思考/失败）。
+      if (!info.error && info.emitted && info.member) {
+        dockGroupState.memberId = String(info.member.id || '');
+        dockGroupState.memberName = friendlyMemberName(info.member);
+        dockGroupState.sessionId = info.sessionId || dockGroupState.sessionId;
+        dockGroupState.updatedAt = Date.now();
+      }
       appendGroupEvent(ctx, info.sessionId, GROUP_RECORD_PROBE, {
         member: info.member.id,
         status: info.error ? 'fail' : 'ok',
@@ -692,6 +724,13 @@ function buildGroupAdapter(ctx, llm) {
       }
     },
     onFailover: (info) => {
+      // dock 徽标：记录「刚从哪个模型切换过来」，供几秒内的橙色高亮提示。
+      if (info.from) {
+        dockGroupState.switchFrom = friendlyMemberName(info.from);
+        dockGroupState.switchAt = Date.now();
+        dockGroupState.switchCount += 1;
+        dockGroupState.sessionId = info.sessionId || dockGroupState.sessionId;
+      }
       appendGroupEvent(ctx, info.sessionId, GROUP_RECORD_FAILOVER, {
         from: info.from ? info.from.id : '',
         to: info.to ? info.to.id : '',
@@ -736,6 +775,25 @@ async function groupStatusSnapshot(ctx) {
   };
 }
 
+/** 输入框 dock 徽标状态：当前实际出正文的模型 + 切换/熔断计数。 */
+async function dockStatusSnapshot(ctx) {
+  const members = (await resolveGroupMembers(ctx)) || [];
+  const cooling = members.filter((m) => groupHealth.cooldownRemainingMs(m.id) > 0).length;
+  // 「刚切换」提示保留 6 秒，之后回落到常态绿色。
+  const SWITCH_NOTICE_MS = 6000;
+  const justSwitched = Boolean(dockGroupState.switchFrom) && (Date.now() - dockGroupState.switchAt < SWITCH_NOTICE_MS);
+  return {
+    ok: true,
+    active: Boolean(dockGroupState.memberName),
+    memberName: dockGroupState.memberName || '',
+    memberId: dockGroupState.memberId || '',
+    switchFrom: justSwitched ? dockGroupState.switchFrom : '',
+    switchCount: dockGroupState.switchCount || 0,
+    cooldownCount: cooling,
+    updatedAt: dockGroupState.updatedAt || 0,
+  };
+}
+
 /** 探测所有成员（用现有 probeStreaming 快速首包探测），刷新健康表。 */
 async function probeGroup(ctx) {
   const members = (await resolveGroupMembers(ctx)) || [];
@@ -761,7 +819,7 @@ async function probeGroup(ctx) {
   return { ok: true, probed: out.length, results: out };
 }
 
-/** POST /api/nvidia-models — actions: detect | test | keyStatus | setKey | clearKey | configure | groupStatus | probeGroup | resetGroup | getGroupConfig | setGroupConfig | usageStats | resetUsage. */
+/** POST /api/nvidia-models — actions: detect | test | keyStatus | setKey | clearKey | configure | groupStatus | probeGroup | resetGroup | getGroupConfig | setGroupConfig | usageStats | resetUsage | checkUpdate | dockStatus. */
 function createNvidiaModelsRoute(ctx) {
   return {
     path: '/api/nvidia-models',
@@ -835,6 +893,8 @@ function createNvidiaModelsRoute(ctx) {
         result = { ok: true, stats: groupUsage.snapshot() };
       } else if (action === 'checkUpdate') {
         result = await checkUpdate(ctx);
+      } else if (action === 'dockStatus') {
+        result = await dockStatusSnapshot(ctx);
       } else {
         result = await detectNvidiaModels();
         if (result && result.source === 'live') lastDetectedModels = normalizeGroupMembers(result.models);
@@ -950,6 +1010,18 @@ export function apply(ctx) {
   // 反复判失败、推进熔断，重载后如果沿用旧状态，刚修好的成员仍会被跳过。
   // 清零是安全的——真正的上游不可用仍由 FAILOVER 与看板实时探测照常兜底。
   try { groupHealth.reset(); } catch { /* 忽略 */ }
+
+  // 同步清空 dock 徽标状态：重载后没有"当前模型"可报，徽标回落为不显示，
+  // 直到模型组下一次真正产出正文才重新点亮。
+  try {
+    dockGroupState.sessionId = null;
+    dockGroupState.memberId = '';
+    dockGroupState.memberName = '';
+    dockGroupState.switchFrom = '';
+    dockGroupState.switchAt = 0;
+    dockGroupState.switchCount = 0;
+    dockGroupState.updatedAt = 0;
+  } catch { /* 忽略 */ }
 
   // 从磁盘读回调用日志快照（重载/重启不丢）。fire-and-forget：hydrate 内部已
   // 全量 try/catch，失败静默；不阻塞插件激活。
