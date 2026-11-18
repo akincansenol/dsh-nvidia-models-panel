@@ -134,12 +134,15 @@ window.__ModuleLoader__.load({
           border: '1px solid ' + (justSwitched ? 'rgba(230,81,0,0.55)' : 'rgba(143,206,0,0.5)'),
           background: justSwitched ? 'rgba(230,81,0,0.10)' : 'rgba(143,206,0,0.08)',
           borderRadius: '999px',
-          padding: '2px 8px',
+          padding: '2px 10px',
           cursor: 'pointer',
           whiteSpace: 'nowrap',
           maxWidth: '420px',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
+          height: '32px',
+          boxSizing: 'border-box',
+          flexShrink: 0,
         },
       }, label);
     }
