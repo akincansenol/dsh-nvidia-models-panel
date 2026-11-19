@@ -199,6 +199,34 @@ test('dock badge hides once the session switches to a non-nvidia-group model', a
   assert.equal(reshown.active, true, 're-shown after switching back');
 });
 
+test('dock badge hides when a specific group member is selected instead of auto', async () => {
+  const { ctx, registered, sid, services } = makeCtx();
+  plugin.apply(ctx);
+  const route = registered.routes[0].route;
+  const adapter = registered.adapters.get('nvidia-group');
+  const mk = (obj) => ({ body: { getReader() { let done = false; const b = new TextEncoder().encode(JSON.stringify(obj)); return { async read() { if (done) return { done: true }; done = true; return { done: false, value: b }; }, async cancel() {} }; } } });
+
+  // Produce text with the group so dockGroupState becomes active.
+  const prepared = await adapter.prepareCall('nvidia-group', 'nvidia/nemotron-3.5-lightning-30b-a3b');
+  for await (const _ of prepared.stream({ model: 'nvidia/nemotron-3.5-lightning-30b-a3b', messages: [], sessionId: sid })) { /* drain */ }
+  const active = await (await route.fetch(mk({ action: 'dockStatus', sessionId: sid }))).json();
+  assert.equal(active.active, true, 'active with no header info (best-effort)');
+
+  // Auto mode -> visible.
+  services.sessions.get(sid).requestHeader = function () {
+    return { config: { provider: 'nvidia-group', model: '__auto__', maxTokens: 8192 } };
+  };
+  const autoShown = await (await route.fetch(mk({ action: 'dockStatus', sessionId: sid }))).json();
+  assert.equal(autoShown.active, true, 'visible in auto mode');
+
+  // A specific member of the group selected -> badge hides.
+  services.sessions.get(sid).requestHeader = function () {
+    return { config: { provider: 'nvidia-group', model: 'nvidia/nemotron-3.5-lightning-30b-a3b', maxTokens: 8192 } };
+  };
+  const specificHidden = await (await route.fetch(mk({ action: 'dockStatus', sessionId: sid }))).json();
+  assert.equal(specificHidden.active, false, 'hidden when a specific group member is picked');
+});
+
 test('route action setGroupConfig clamps firstByteTimeoutMs', async () => {
   const { ctx, registered } = makeCtx();
   plugin.apply(ctx);

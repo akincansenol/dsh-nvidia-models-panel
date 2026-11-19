@@ -842,19 +842,28 @@ async function dockStatusSnapshot(ctx, sessionId) {
   // 当前会话已切到别的模型时隐藏徽标：读会话最新 request/header 的 provider。
   // best-effort：读不到 header 时保持原逻辑，避免误隐藏。
   let currentProvider = '';
+  let currentModel = '';
   try {
     const session = sessionFor(ctx, sessionId);
     const header = session && typeof session.requestHeader === 'function' ? session.requestHeader() : null;
-    if (header && header.config && typeof header.config.provider === 'string') {
-      currentProvider = header.config.provider;
+    if (header && header.config) {
+      if (typeof header.config.provider === 'string') {
+        currentProvider = header.config.provider;
+      }
+      if (typeof header.config.model === 'string') {
+        currentModel = header.config.model;
+      }
     }
   } catch {
     currentProvider = '';
+    currentModel = '';
   }
   const usingGroup = !currentProvider || currentProvider === 'nvidia-group';
+  // best-effort: 读不到 model 信息时不隐藏；只有明确选了非 auto 的具体模型才隐藏。
+  const isAutoModel = !currentModel || isAutoMemberId(currentModel);
   return {
     ok: true,
-    active: Boolean(dockGroupState.memberName) && usingGroup,
+    active: Boolean(dockGroupState.memberName) && usingGroup && isAutoModel,
     memberName: dockGroupState.memberName || '',
     memberId: dockGroupState.memberId || '',
     switchFrom: justSwitched ? dockGroupState.switchFrom : '',
