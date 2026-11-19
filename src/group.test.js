@@ -187,6 +187,44 @@ test('createGroupAdapter: listModels/resolveModel/prepareCall/stream shapes', as
   assert.equal(out[0].text, 'x:m1');
 });
 
+test('createGroupAdapter: a specifically selected member is locked (no silent failover/failover count)', async () => {
+  const calls = [];
+  const streamChild = (opts) => (async function* () {
+    calls.push(opts.model);
+    if (opts.model === 'm1') { yield chunkFinishErr('UPSTREAM', 'boom'); return; }
+    yield chunkText('x:' + opts.model);
+    yield chunkFinishStop;
+  })();
+  const attempts = [];
+  const adapter = createGroupAdapter({
+    getMembers: async () => [{ id: 'm1' }, { id: 'm2' }, { id: 'm3' }],
+    streamChild,
+    health: createHealthRegistry(),
+    onAttempt: (info) => attempts.push(info),
+  });
+  // Manually selected m1 fails -> must NOT try m2/m3; failover must not be counted.
+  let out = await collect(adapter.stream({ model: 'm1', messages: [] }));
+  assert.deepEqual(calls, ['m1']);
+  assert.equal(out[out.length - 1].reason.kind, 'error');
+  assert.equal(attempts.length, 1);
+  assert.equal(attempts[0].failover, false);
+  // Auto mode still fails over across members (fresh health so ordering is deterministic).
+  const autoCalls = [];
+  const autoAdapter = createGroupAdapter({
+    getMembers: async () => [{ id: 'm1' }, { id: 'm2' }, { id: 'm3' }],
+    streamChild: (opts) => (async function* () {
+      autoCalls.push(opts.model);
+      if (opts.model === 'm1') { yield chunkFinishErr('UPSTREAM', 'boom'); return; }
+      yield chunkText('x:' + opts.model);
+      yield chunkFinishStop;
+    })(),
+    health: createHealthRegistry(),
+  });
+  out = await collect(autoAdapter.stream({ model: AUTO_MEMBER_ID, messages: [] }));
+  assert.deepEqual(autoCalls, ['m1', 'm2']);
+  assert.equal(out[out.length - 1].reason.kind, 'stop');
+});
+
 test('projection: foldGroupEvent over failover + probe', () => {
   let s = createGroupState();
   s = foldGroupEvent(s, { type: 'nvidia-group/failover', time: 100, data: { from: 'm1', error: 'boom' } });
@@ -215,7 +253,7 @@ test('describeError handles strings, objects, null', () => {
   assert.equal(describeError({ code: 'C' }), 'C');
 });
 
-test('capability-aware routing: a text-only model hit with an image 400s, then falls back to a vision member', async () => {
+test('capability-aware routing: explicitly picked text model with an image stays locked (no fallback)', async () => {
   const calls = [];
   const members = [
     { id: 'text-only-model', name: 'T', inputModalities: ['text'] },
@@ -237,16 +275,16 @@ test('capability-aware routing: a text-only model hit with an image 400s, then f
     firstByteTimeoutMs: 0,
     firstTextTimeoutMs: 0,
   });
-  // Pick the text-only member explicitly, but send an image → it is tried first (honest),
-  // 400s as a capability mismatch (no circuit-open), then the vision member succeeds.
+  // Manually picked text model + image -> 400 surfaces honestly; the vision member is NOT tried.
+  // (Manual selection = locked; auto-failover only applies to 「模型组（自动）」.)
   const imgOptions = {
     model: 'text-only-model',
     messages: [{ role: 'user', content: [{ type: 'text', text: 'look' }, { type: 'image', source: {} }] }],
   };
   const out = [];
   for await (const c of adapter.stream(imgOptions)) out.push(c);
-  assert.equal(out[out.length - 1].reason.kind, 'stop');
-  assert.deepEqual(calls, ['text-only-model', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning']);
+  assert.equal(out[out.length - 1].reason.kind, 'error');
+  assert.deepEqual(calls, ['text-only-model']);
 });
 
 test('capability-aware routing is SOFT: non-vision members stay as fallback after vision ones', async () => {

@@ -531,7 +531,10 @@ export function createGroupAdapter(deps) {
         }
         const pickAuto = isAutoMemberId(options && options.model);
         const current = pickAuto ? null : members.find((m) => m.id === (options && options.model));
-        let candidates = current ? [current, ...members.filter((m) => m.id !== current.id)] : members;
+        // 手动选中具体模型 = 锁定该模型：候选只保留它本身，不做任何自动故障转移。
+        // 这样失败就如实报错，不会悄悄切到别的成员、也不会在面板"自动切换"里计数。
+        // 只有选「模型组（自动）」时才把全部成员交给故障转移引擎轮询。
+        let candidates = current ? [current] : members;
         // 能力感知路由（软过滤）：含图片的请求**优先**把多模态成员排到前面，
         // 但保留全部成员作为后备。绝不把组员砍到只剩"看起来支持图片"的那几个——
         // id 正则判断并不可靠（如 muse-glimmer 实为多模态却被判为纯文本），
