@@ -14,8 +14,8 @@
 /** 虚拟「自动」成员的模型 id：不指定首选，纯按实时健康排序。 */
 export const AUTO_MEMBER_ID = '__auto__';
 /** 「自动」成员的展示名 / 描述。 */
-export const AUTO_MEMBER_NAME = 'NVIDIA 模型组（自动）';
-export const AUTO_MEMBER_DESC = '自动选择并故障转移，无需指定首选模型';
+export const AUTO_MEMBER_NAME = 'NVIDIA Group (Auto)';
+export const AUTO_MEMBER_DESC = 'Auto-select healthiest model and fail over automatically';
 
 /** 判断一个模型 id 是否为「自动」虚拟成员。 */
 export function isAutoMemberId(id) {
@@ -263,7 +263,7 @@ export async function* runFailover(options, deps) {
 
     for (const member of order) {
       if (parentSignal && parentSignal.aborted) {
-        yield { type: 'finish', reason: { kind: 'aborted', failure: { code: 'ABORTED', message: '请求已取消' } } };
+        yield { type: 'finish', reason: { kind: 'aborted', failure: { code: 'ABORTED', message: 'Request cancelled' } } };
         return;
       }
       if (tried.has(member.id)) continue;
@@ -310,7 +310,7 @@ export async function* runFailover(options, deps) {
             }
           }
           if (isErrorFinish(chunk)) {
-            failure = (chunk.reason && chunk.reason.failure) || { code: 'MEMBER_ERROR', message: '模型返回错误' };
+            failure = (chunk.reason && chunk.reason.failure) || { code: 'MEMBER_ERROR', message: 'Model returned an error' };
             break;
           }
           if (chunk && chunk.type === 'usage' && chunk.usage) lastUsage = chunk.usage;
@@ -334,7 +334,7 @@ export async function* runFailover(options, deps) {
         }
       } catch (error) {
         failure = timedOut
-          ? { code: 'FIRST_BYTE_TIMEOUT', message: '首包超时（' + firstByteTimeoutMs + 'ms 内无响应），已自动切换' }
+          ? { code: 'FIRST_BYTE_TIMEOUT', message: 'First-byte timeout (' + firstByteTimeoutMs + 'ms), failed over' }
           : { code: 'MEMBER_THROW', message: describeError(error) };
       } finally {
         if (timer) clearTimeout(timer);
@@ -347,13 +347,13 @@ export async function* runFailover(options, deps) {
       if (timedOut) {
         failure = {
           code: 'FIRST_BYTE_TIMEOUT',
-          message: '首包超时（' + firstByteTimeoutMs + 'ms 内无响应），已自动切换',
+          message: 'First-byte timeout (' + firstByteTimeoutMs + 'ms), failed over',
           cause: failure || undefined,
         };
       } else if (textTimedOut && !emitted) {
         failure = {
           code: 'FIRST_TEXT_TIMEOUT',
-          message: '首段正文超时（' + firstTextTimeoutMs + 'ms 内无输出正文），已自动切换',
+          message: 'First-text timeout (' + firstTextTimeoutMs + 'ms), failed over',
           cause: failure || undefined,
         };
       }
@@ -363,10 +363,10 @@ export async function* runFailover(options, deps) {
       // 静默当成正常回答交给用户（那正是“没有输出内容 + 已达到输出 token 上限”的成因）。
       if (!emitted && !failure) {
         const inner = (sawFinish && sawFinish.reason) || null;
-        const reasonNote = inner && inner.kind === 'max-tokens' ? '（输出预算耗尽在思考内容上，未产出正文）' : '（未产出任何正文）';
+        const reasonNote = inner && inner.kind === 'max-tokens' ? ' (output budget spent on reasoning, no visible text)' : ' (no visible text produced)';
         failure = {
           code: 'EMPTY_ANSWER',
-          message: '模型未产出正文' + reasonNote + '，已自动切换',
+          message: 'Model produced no text' + reasonNote + ', failed over',
         };
       }
 
@@ -410,15 +410,15 @@ export async function* runFailover(options, deps) {
   if (attempted === 0) {
     yield {
       type: 'finish',
-      reason: { kind: 'error', failure: { code: 'ALL_MEMBERS_COOLING', message: '模型组内所有模型都在熔断冷却中，请稍后重试或手动探测恢复' } },
+      reason: { kind: 'error', failure: { code: 'ALL_MEMBERS_COOLING', message: 'All group members are in circuit-breaker cooldown; please retry later or probe to recover' } },
     };
     return;
   }
-  const finalFailure = toFailure(lastFailure || { code: 'ALL_MEMBERS_FAILED', message: '模型组内所有模型均调用失败' });
+  const finalFailure = toFailure(lastFailure || { code: 'ALL_MEMBERS_FAILED', message: 'All group members failed' });
   if (lastFailure && lastFailure.code === 'EMPTY_ANSWER') {
     // 最后一个失败是“只思考没正文”：给出明确、可操作的提示，而不是含糊的“模型组均失败”。
     finalFailure.code = 'EMPTY_ANSWER';
-    finalFailure.message = '组内所有模型都没有产出正文（重推理模型把输出预算耗在思考上），请重试、增大 maxTokens 或改用非推理模型';
+    finalFailure.message = 'All group members produced no visible text (reasoning models spent output budget on thinking); please retry, increase maxTokens, or use a non-reasoning model';
   }
   if (typeof deps.onFailover === 'function') {
     try { deps.onFailover({ from: lastTriedMember, to: null, error: finalFailure, sessionId, exhausted: true }); } catch { /* 忽略 */ }
@@ -466,7 +466,7 @@ export function memberSupportsImage(member) {
  * }} deps
  */
 export function createGroupAdapter(deps) {
-  const groupName = deps.groupName || 'NVIDIA 模型组';
+  const groupName = deps.groupName || 'NVIDIA Group';
   const getMembers = deps.getMembers;
   const adapter = {
     providerInfo(provider) { return { id: provider, name: groupName }; },
@@ -525,7 +525,7 @@ export function createGroupAdapter(deps) {
         if (!members.length) {
           yield {
             type: 'finish',
-            reason: { kind: 'error', failure: { code: 'EMPTY_GROUP', message: 'NVIDIA 模型组当前没有可用成员，请先在面板中检测并配置模型' } },
+            reason: { kind: 'error', failure: { code: 'EMPTY_GROUP', message: 'NVIDIA Group currently has no available members; detect and configure models in the panel first' } },
           };
           return;
         }

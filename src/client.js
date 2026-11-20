@@ -6,26 +6,26 @@ window.__ModuleLoader__.load({
     const h = React.createElement;
 
     const BUILTIN_MODELS = [
-      { id: 'nvidia/llama-3.1-nemotron-70b-instruct', name: 'Llama 3.1 Nemotron 70B', description: 'NVIDIA 旗舰推理模型，擅长复杂推理、编码与数学', contextLength: 128000 },
-      { id: 'nvidia/nemotron-3-ultra-550b-a55b', name: 'Nemotron 3 Ultra 550B', description: '超大参数模型，推理与编码能力极强', contextLength: 1000000 },
-      { id: 'nvidia/nemotron-3-super-120b-a12b', name: 'Nemotron 3 Super 120B', description: '高性能均衡型，适合企业级日常任务', contextLength: 262144 },
-      { id: 'nvidia/nemotron-3.5-lightning-30b-a3b', name: 'Nemotron 3.5 Lightning 30B', description: '轻量高速 MoE 模型，响应快、成本低', contextLength: 262144 },
-      { id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', name: 'Nemotron 3 Nano Omni 30B', description: '全模态模型，支持文本与图像输入', contextLength: 256000 },
-      { id: 'nvidia/llama-3.1-nemotron-ultra-253b-v1', name: 'Llama 3.1 Nemotron Ultra 253B', description: 'Llama 3.1 的 NVIDIA 深度优化版本，253B 参数', contextLength: 128000 },
-      { id: 'nvidia/cosmos-reason2-8b', name: 'Cosmos Reason2 8B', description: '物理世界推理模型，面向机器人与视频理解', contextLength: 131072 },
-      { id: 'deepseek-ai/deepseek-v4.1-flash', name: 'DeepSeek V4.1 Flash', description: 'DeepSeek 高速版，长上下文，支持文本与图像', contextLength: 1000000 },
-      { id: 'moonshotai/kimi-k3', name: 'Kimi K3', description: '月之暗面旗舰模型，百万级上下文窗口', contextLength: 1048576 },
-      { id: 'z-ai/glm-5.3', name: 'GLM-5.3', description: '智谱旗舰大模型，强推理与长上下文', contextLength: 1000000 },
+      { id: 'nvidia/llama-3.1-nemotron-70b-instruct', name: 'Llama 3.1 Nemotron 70B', description: 'NVIDIA flagship reasoning model for complex reasoning, coding, and math', contextLength: 128000 },
+      { id: 'nvidia/nemotron-3-ultra-550b-a55b', name: 'Nemotron 3 Ultra 550B', description: 'Ultra-large model with strong reasoning and coding', contextLength: 1000000 },
+      { id: 'nvidia/nemotron-3-super-120b-a12b', name: 'Nemotron 3 Super 120B', description: 'Balanced high-performance model for enterprise tasks', contextLength: 262144 },
+      { id: 'nvidia/nemotron-3.5-lightning-30b-a3b', name: 'Nemotron 3.5 Lightning 30B', description: 'Lightweight fast MoE model', contextLength: 262144 },
+      { id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', name: 'Nemotron 3 Nano Omni 30B', description: 'Omni-modal model supporting text and image', contextLength: 256000 },
+      { id: 'nvidia/llama-3.1-nemotron-ultra-253b-v1', name: 'Llama 3.1 Nemotron Ultra 253B', description: 'NVIDIA-optimized Llama 3.1 253B model', contextLength: 128000 },
+      { id: 'nvidia/cosmos-reason2-8b', name: 'Cosmos Reason2 8B', description: 'Physical-world reasoning model for robotics and video', contextLength: 131072 },
+      { id: 'deepseek-ai/deepseek-v4.1-flash', name: 'DeepSeek V4.1 Flash', description: 'DeepSeek fast long-context model supporting text and image', contextLength: 1000000 },
+      { id: 'moonshotai/kimi-k3', name: 'Kimi K3', description: 'Moonshot Kimi flagship model with 1M context window', contextLength: 1048576 },
+      { id: 'z-ai/glm-5.3', name: 'GLM-5.3', description: 'Zhipu GLM flagship model with strong reasoning and long context', contextLength: 1000000 },
     ];
 
-    const VERIFY_CONCURRENCY = 6;
+    const VERIFY_CONCURRENCY = 4;
 
     function NvidiaPanelIcon(props) {
       const active = !!(props && props.active);
       return h('button', {
         onClick: props && props.onClick,
-        'aria-label': 'NVIDIA 模型',
-        title: 'NVIDIA 模型',
+        'aria-label': 'NVIDIA Models',
+        title: 'NVIDIA Models',
         style: {
           display: 'flex',
           alignItems: 'center',
@@ -50,26 +50,26 @@ window.__ModuleLoader__.load({
     /** Badge for one model's probe result. */
     function statusBadge(result) {
       if (!result) {
-        return h('span', { style: { fontSize: '11px', opacity: 0.5, border: '1px solid rgba(128,128,128,0.35)', borderRadius: '4px', padding: '1px 6px' } }, '未试调用');
+        return h('span', { style: { fontSize: '11px', opacity: 0.5, border: '1px solid rgba(128,128,128,0.35)', borderRadius: '4px', padding: '1px 6px' } }, 'Untested');
       }
       if (result.status === 'testing') {
-        return h('span', { style: { fontSize: '11px', color: '#b8860b', border: '1px solid #b8860b', borderRadius: '4px', padding: '1px 6px' } }, '试调用中…');
+        return h('span', { style: { fontSize: '11px', color: '#b8860b', border: '1px solid #b8860b', borderRadius: '4px', padding: '1px 6px' } }, 'Testing…');
       }
       if (result.status === 'ok') {
-        return h('span', { style: { fontSize: '11px', color: '#2e7d32', border: '1px solid #2e7d32', borderRadius: '4px', padding: '1px 6px', background: 'rgba(46,125,50,0.10)' } }, '可用 ✓');
+        return h('span', { style: { fontSize: '11px', color: '#2e7d32', border: '1px solid #2e7d32', borderRadius: '4px', padding: '1px 6px', background: 'rgba(46,125,50,0.10)' } }, 'Available ✓');
       }
       if (result.status === 'skip') {
-        return h('span', { style: { fontSize: '11px', opacity: 0.6, border: '1px dashed rgba(128,128,128,0.5)', borderRadius: '4px', padding: '1px 6px' } }, '跳过');
+        return h('span', { style: { fontSize: '11px', opacity: 0.6, border: '1px dashed rgba(128,128,128,0.5)', borderRadius: '4px', padding: '1px 6px' } }, 'Skipped');
       }
-      return h('span', { style: { fontSize: '11px', color: '#c62828', border: '1px solid #c62828', borderRadius: '4px', padding: '1px 6px', background: 'rgba(198,40,40,0.08)' } }, '不可用');
+      return h('span', { style: { fontSize: '11px', color: '#c62828', border: '1px solid #c62828', borderRadius: '4px', padding: '1px 6px', background: 'rgba(198,40,40,0.08)' } }, 'Unavailable');
     }
 
     /** Badge for one group member's live health status. */
     function groupBadge(status) {
       const map = {
-        ok: { c: '#2e7d32', t: '健康 ✓' },
-        failed: { c: '#c62828', t: '故障' },
-        unknown: { c: '#8a8a8a', t: '未知' },
+        ok: { c: '#2e7d32', t: 'Healthy ✓' },
+        failed: { c: '#c62828', t: 'Failed' },
+        unknown: { c: '#8a8a8a', t: 'Unknown' },
       };
       const s = map[status] || map.unknown;
       return h('span', {
@@ -149,11 +149,11 @@ window.__ModuleLoader__.load({
 
       if (!status || !status.active) return null;
 
-      const name = status.memberName || status.memberId || '模型组';
+      const name = status.memberName || status.memberId || 'Group';
       const justSwitched = Boolean(status.switchFrom);
       const label = justSwitched
-        ? ('⚡ ' + name + ' ← 从 ' + status.switchFrom + ' 切换 · 切换 ' + status.switchCount + ' 次')
-        : ('⚡ ' + name + ' · 切换 ' + status.switchCount + ' 次 · 熔断 ' + status.cooldownCount);
+        ? ('⚡ ' + name + ' ← from ' + status.switchFrom + ' · ' + status.switchCount + ' switches')
+        : ('⚡ ' + name + ' · ' + status.switchCount + ' switches · ' + status.cooldownCount + ' cooling');
 
       const openUsage = function () {
         try {
@@ -177,7 +177,7 @@ window.__ModuleLoader__.load({
         ref: btnRef,
         type: 'button',
         onClick: openUsage,
-        title: '查看 NVIDIA 模型组调用日志',
+        title: 'View NVIDIA Group usage log',
         style: {
           display: 'inline-flex',
           alignItems: 'center',
@@ -253,9 +253,9 @@ window.__ModuleLoader__.load({
 
       const saveKey = useCallback(async function () {
         const key = keyInput.trim();
-        if (!key) { setKeyMsg('请先输入 API Key'); return; }
+        if (!key) { setKeyMsg('Please enter an API Key first'); return; }
         setKeyBusy(true);
-        setKeyMsg('保存中…');
+        setKeyMsg('Saving…');
         try {
           const response = await fetch('/api/nvidia-models', {
             method: 'POST',
@@ -265,13 +265,13 @@ window.__ModuleLoader__.load({
           const data = await response.json();
           if (data && data.saved) {
             setKeyInput('');
-            setKeyMsg('已保存到凭据存储（不进入配置文件）。正式 nvidia 模型路由下一次请求即生效，现在可以点「逐个试调用」。');
+            setKeyMsg('Saved to credential store (not written to config files). Active on next request; you can now run Verify All.');
             await refreshKeyStatus();
           } else {
-            setKeyMsg('保存失败：' + ((data && data.error) || ('HTTP ' + response.status)));
+            setKeyMsg('Save failed: ' + ((data && data.error) || ('HTTP ' + response.status)));
           }
         } catch (error) {
-          setKeyMsg('保存请求失败：' + String((error && error.message) || error));
+          setKeyMsg('Save request failed: ' + String((error && error.message) || error));
         } finally {
           setKeyBusy(false);
         }
@@ -279,7 +279,7 @@ window.__ModuleLoader__.load({
 
       const clearKey = useCallback(async function () {
         setKeyBusy(true);
-        setKeyMsg('清除中…');
+        setKeyMsg('Clearing…');
         try {
           const response = await fetch('/api/nvidia-models', {
             method: 'POST',
@@ -288,13 +288,13 @@ window.__ModuleLoader__.load({
           });
           const data = await response.json();
           if (data && data.cleared) {
-            setKeyMsg('已清除存储的 Key（环境变量 ONE_BALANCE_API_KEY 若存在将重新生效）。');
+            setKeyMsg('Cleared stored key (ONE_BALANCE_API_KEY env var will be used if set).');
             await refreshKeyStatus();
           } else {
-            setKeyMsg('清除失败：' + ((data && data.error) || ('HTTP ' + response.status)));
+            setKeyMsg('Clear failed: ' + ((data && data.error) || ('HTTP ' + response.status)));
           }
         } catch (error) {
-          setKeyMsg('清除请求失败：' + String((error && error.message) || error));
+          setKeyMsg('Clear request failed: ' + String((error && error.message) || error));
         } finally {
           setKeyBusy(false);
         }
@@ -310,7 +310,7 @@ window.__ModuleLoader__.load({
 
       const detectModels = useCallback(async function () {
         setDetecting(true);
-        setMessage('正在实时查询 NVIDIA API…');
+        setMessage('Querying NVIDIA API…');
         setResults({});
         try {
           const response = await fetch('/api/nvidia-models', {
@@ -322,14 +322,14 @@ window.__ModuleLoader__.load({
           const data = await response.json();
           if (data && data.source === 'live' && Array.isArray(data.models)) {
             setModels(data.models);
-            setMessage('实时检测到 ' + data.count + ' 个模型（来自 NVIDIA API）。点击「逐个试调用」验证每个模型真实可用性。');
+            setMessage('Detected ' + data.count + ' models live from NVIDIA API. Click "Verify All" to test availability via One-Balance.');
           } else {
             setModels((data && data.models) || BUILTIN_MODELS);
-            setMessage((data && data.reason ? data.reason + '，' : '') + '已显示内置目录。');
+            setMessage((data && data.reason ? data.reason + '; ' : '') + 'showing built-in catalog.');
           }
         } catch (error) {
           setModels(BUILTIN_MODELS);
-          setMessage('检测请求失败：' + String((error && error.message) || error) + '，已显示内置目录。');
+          setMessage('Detection failed: ' + String((error && error.message) || error) + '; showing built-in catalog.');
         } finally {
           setDetecting(false);
         }
@@ -345,7 +345,7 @@ window.__ModuleLoader__.load({
         const total = list.length;
         setResults({});
         for (const id of queue) { finalResults[id] = { status: 'testing' }; setOne(id, { status: 'testing' }); }
-        setMessage('逐个试调用中（并发 ' + VERIFY_CONCURRENCY + '，流式首包判定）… 0/' + total);
+        setMessage('Verifying models (concurrency ' + VERIFY_CONCURRENCY + ', first-byte stream check)… 0/' + total);
 
         async function worker() {
           for (;;) {
@@ -360,18 +360,18 @@ window.__ModuleLoader__.load({
                 body: JSON.stringify({ action: 'test', model: id }),
               });
               if (!response.ok) {
-                outcome = { status: 'fail', detail: '检测请求失败（HTTP ' + response.status + '）' };
+                outcome = { status: 'fail', detail: 'Probe failed (HTTP ' + response.status + ')' };
               } else {
                 const data = await response.json();
                 outcome = { status: data.status, detail: data.detail };
               }
             } catch (error) {
-              outcome = { status: 'fail', detail: '检测请求异常：' + String((error && error.message) || error) };
+              outcome = { status: 'fail', detail: 'Probe error: ' + String((error && error.message) || error) };
             }
             finalResults[id] = outcome;
             setOne(id, outcome);
             done += 1;
-            setMessage('逐个试调用中… ' + done + '/' + total);
+            setMessage('Verifying… ' + done + '/' + total);
           }
         }
 
@@ -387,11 +387,11 @@ window.__ModuleLoader__.load({
         const finalResults = await runVerification(models);
         const done = Object.keys(finalResults).length;
         if (cancelRef.current) {
-          setMessage('试调用已手动停止（完成 ' + done + '/' + models.length + '）。');
+          setMessage('Verification stopped (' + done + '/' + models.length + ' completed).');
           return;
         }
         const okCount = Object.values(finalResults).filter(function (r) { return r && r.status === 'ok'; }).length;
-        setMessage('试调用完成：' + done + ' 个模型，其中 ' + okCount + ' 个真实可用。点「一键配置到设置」把可用模型写入设置。');
+        setMessage('Verification complete: ' + okCount + '/' + done + ' models available. Click "One-Click Configure" to save them.');
       }, [models, verifying, runVerification]);
 
       const [configuring, setConfiguring] = useState(false);
@@ -400,7 +400,7 @@ window.__ModuleLoader__.load({
       const configureModels = useCallback(async function () {
         if (configuring) return;
         if (models.length === 0) {
-          setMessage('请先点「检测可用模型」获取列表。');
+          setMessage('Click "Detect Models" first to fetch the model list.');
           return;
         }
         setConfiguring(true);
@@ -409,10 +409,10 @@ window.__ModuleLoader__.load({
         }).length;
         let finalResults = results;
         if (tested < models.length) {
-          setMessage('尚未完成试调用——先自动逐个试调用，再写入可用模型…');
+          setMessage('Verification incomplete — verifying models before saving…');
           finalResults = await runVerification(models);
           if (cancelRef.current) {
-            setMessage('试调用被手动停止，已中止配置。可再次点击继续。');
+            setMessage('Verification stopped; configuration aborted.');
             setConfiguring(false);
             return;
           }
@@ -422,7 +422,7 @@ window.__ModuleLoader__.load({
           probePayload[id] = finalResults[id] && finalResults[id].status === 'ok' ? 'ok' : 'unavailable';
         }
         const okCount = Object.values(finalResults).filter(function (r) { return r && r.status === 'ok'; }).length;
-        setMessage('正在把 ' + okCount + ' 个可用模型写入设置…');
+        setMessage('Writing ' + okCount + ' available models to settings…');
         try {
           const response = await fetch('/api/nvidia-models', {
             method: 'POST',
@@ -432,16 +432,16 @@ window.__ModuleLoader__.load({
           if (!response.ok) throw new Error('HTTP ' + response.status);
           const data = await response.json();
           if (data && data.ok) {
-            setMessage(data.message || '已写入设置。');
+            setMessage(data.message || 'Saved to settings.');
             // 配置会改写 nvidia 供应商的模型列表，也即模型组的成员来源；
             // 立即刷新健康看板并切到「模型组健康」页，让用户马上看到新成员。
             try { await refreshGroup(); } catch { /* best-effort */ }
             setTab('group');
           } else {
-            setMessage('配置失败：' + ((data && data.error) || '未知错误'));
+            setMessage('Configuration failed: ' + ((data && data.error) || 'Unknown error'));
           }
         } catch (error) {
-          setMessage('配置请求失败：' + String((error && error.message) || error));
+          setMessage('Configuration request failed: ' + String((error && error.message) || error));
         } finally {
           setConfiguring(false);
         }
@@ -476,7 +476,7 @@ window.__ModuleLoader__.load({
       const probeGroupNow = useCallback(async function () {
         if (groupBusy) return;
         setGroupBusy(true);
-        setGroupMsg('正在探测模型组内每个成员（首包判定）…');
+        setGroupMsg('Probing all group members (first-byte check)…');
         try {
           const response = await fetch('/api/nvidia-models', {
             method: 'POST',
@@ -485,10 +485,10 @@ window.__ModuleLoader__.load({
           });
           const data = await response.json();
           const okCount = (data && data.results) ? data.results.filter(function (r) { return r && r.status === 'ok'; }).length : 0;
-          setGroupMsg('探测完成：' + (data.probed || 0) + ' 个成员，其中 ' + okCount + ' 个可用。');
+          setGroupMsg('Probe complete: ' + okCount + '/' + (data.probed || 0) + ' members available.');
           await refreshGroup();
         } catch (error) {
-          setGroupMsg('探测请求失败：' + String((error && error.message) || error));
+          setGroupMsg('Probe request failed: ' + String((error && error.message) || error));
         } finally {
           setGroupBusy(false);
         }
@@ -503,9 +503,9 @@ window.__ModuleLoader__.load({
           });
           const data = await response.json();
           if (data && data.ok) setGroup(data);
-          setGroupMsg(model ? ('已重置 ' + model + ' 的熔断状态。') : '已重置全部成员的熔断状态。');
+          setGroupMsg(model ? ('Reset circuit breaker for ' + model + '.') : 'Reset all member cooldowns.');
         } catch (error) {
-          setGroupMsg('重置失败：' + String((error && error.message) || error));
+          setGroupMsg('Reset failed: ' + String((error && error.message) || error));
         }
       }, []);
 
@@ -522,23 +522,23 @@ window.__ModuleLoader__.load({
         },
       },
         h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' } },
-          h('span', { style: { fontSize: '13px', fontWeight: 600 } }, '模型组健康看板（自愈故障转移）'),
+          h('span', { style: { fontSize: '13px', fontWeight: 600 } }, 'Group Health (Auto-Failover)'),
           h('div', { style: { display: 'flex', gap: '6px' } },
             h('button', {
               onClick: probeGroupNow,
               disabled: groupBusy,
               style: { padding: '5px 10px', fontSize: '12px', background: '#76B900', color: '#fff', border: 'none', borderRadius: '5px', cursor: groupBusy ? 'wait' : 'pointer', opacity: groupBusy ? 0.6 : 1 },
-            }, groupBusy ? '探测中…' : '探测模型组'),
+            }, groupBusy ? 'Probing…' : 'Probe Group'),
             h('button', {
               onClick: refreshGroup,
               style: { padding: '5px 10px', fontSize: '12px', background: 'transparent', border: '1px solid rgba(128,128,128,0.4)', color: 'inherit', borderRadius: '5px', cursor: 'pointer' },
-            }, '刷新')
+            }, 'Refresh')
           )
         ),
         h('p', { style: { margin: 0, fontSize: '11px', opacity: 0.7, lineHeight: 1.5 } },
-          '选中「NVIDIA 模型组」后，请求按健康度顺序尝试组内模型；首个成员超过 ' +
-          ((group && group.config && group.config.firstByteTimeoutMs ? Math.round(group.config.firstByteTimeoutMs / 1000) : 15)) +
-          ' 秒无首包会立即切下一个；连续失败自动熔断冷却。'),
+          'When "NVIDIA Group (Auto)" is selected, requests try members in health order and fail over if the first byte exceeds ' +
+          ((group && group.config && group.config.firstByteTimeoutMs ? Math.round(group.config.firstByteTimeoutMs / 1000) : 30)) +
+          's; repeated failures trigger exponential cooldown.'),
         groupMsg ? h('p', { style: { margin: 0, fontSize: '12px', lineHeight: 1.5 } }, groupMsg) : null,
         (group && Array.isArray(group.members) && group.members.length > 0)
           ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
@@ -550,25 +550,25 @@ window.__ModuleLoader__.load({
                 },
                   h('span', { style: { fontWeight: 600, fontSize: '12px' } }, m.name || m.id),
                   groupBadge(m.status),
-                  cooling ? h('span', { style: { fontSize: '11px', color: '#b8860b' } }, '熔断中 · 剩余 ' + Math.ceil(m.cooldownRemainingMs / 1000) + 's') : null,
-                  m.lastFirstByteMs !== null && m.lastFirstByteMs !== undefined ? h('span', { style: { fontSize: '11px', opacity: 0.65 } }, '首包 ' + m.lastFirstByteMs + 'ms') : null,
-                  m.failCount > 0 ? h('span', { style: { fontSize: '11px', opacity: 0.65 } }, '失败 ' + m.failCount + ' 次') : null,
+                  cooling ? h('span', { style: { fontSize: '11px', color: '#b8860b' } }, 'Cooling · ' + Math.ceil(m.cooldownRemainingMs / 1000) + 's left') : null,
+                  m.lastFirstByteMs !== null && m.lastFirstByteMs !== undefined ? h('span', { style: { fontSize: '11px', opacity: 0.65 } }, 'TTFB ' + m.lastFirstByteMs + 'ms') : null,
+                  m.failCount > 0 ? h('span', { style: { fontSize: '11px', opacity: 0.65 } }, 'Failures: ' + m.failCount) : null,
                   (cooling || m.failCount > 0) ? h('button', {
                     onClick: function () { resetGroupHealth(m.id); },
                     style: { marginLeft: 'auto', padding: '3px 8px', fontSize: '11px', background: 'transparent', border: '1px solid rgba(128,128,128,0.4)', color: 'inherit', borderRadius: '4px', cursor: 'pointer' },
-                  }, '重置') : null,
+                  }, 'Reset') : null,
                   m.lastError ? h('span', { style: { fontSize: '11px', color: '#c62828', flexBasis: '100%' } }, String(m.lastError).slice(0, 160)) : null
                 );
               })
             )
           : h('p', { style: { margin: 0, fontSize: '12px', opacity: 0.6 } },
-              '组内暂无模型：先在下方「检测可用模型 → 逐个试调用 → 一键配置到设置」写入至少一个可用模型。'),
+              'No models in group yet: run Detect Models → Verify All → One-Click Configure first.'),
         h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', paddingTop: '2px' } },
-          h('span', { style: { fontSize: '11px', opacity: 0.7, alignSelf: 'center' } }, '在对话框模型选择器里选择「NVIDIA 模型组（自动）」即可交由模型组自动选优与故障转移。'),
+          h('span', { style: { fontSize: '11px', opacity: 0.7, alignSelf: 'center' } }, 'Select "NVIDIA Group (Auto)" in the chat model picker for automatic routing & failover.'),
           h('button', {
             onClick: function () { resetGroupHealth(''); },
             style: { padding: '3px 8px', fontSize: '11px', background: 'transparent', border: '1px solid rgba(128,128,128,0.4)', color: 'inherit', borderRadius: '4px', cursor: 'pointer' },
-          }, '重置全部熔断')
+          }, 'Reset All Cooldowns')
         )
       );
 
@@ -646,9 +646,9 @@ window.__ModuleLoader__.load({
           });
           const data = await response.json();
           if (data && data.ok) setUsage(data.stats);
-          setUsageMsg('已清空当日统计。');
+          setUsageMsg('Cleared today\'s usage stats.');
         } catch (error) {
-          setUsageMsg('清空失败：' + String((error && error.message) || error));
+          setUsageMsg('Clear failed: ' + String((error && error.message) || error));
         } finally {
           setUsageBusy(false);
         }
@@ -687,27 +687,27 @@ window.__ModuleLoader__.load({
         style: { padding: '12px', background: 'rgba(118,185,0,0.06)', border: '1px solid rgba(118,185,0,0.35)', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '10px' },
       },
         h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' } },
-          h('span', { style: { fontSize: '13px', fontWeight: 600 } }, '当天模型组调用日志' + (usage && usage.day ? '（' + usage.day + '）' : '')),
+          h('span', { style: { fontSize: '13px', fontWeight: 600 } }, 'Daily Group Usage Log' + (usage && usage.day ? ' (' + usage.day + ')' : '')),
           h('div', { style: { display: 'flex', gap: '6px' } },
             h('button', {
               onClick: refreshUsage,
               style: { padding: '5px 10px', fontSize: '12px', background: '#76B900', color: '#fff', border: 'none', borderRadius: '5px', cursor: 'pointer' },
-            }, '刷新'),
+            }, 'Refresh'),
             h('button', {
               onClick: resetUsageToday,
               disabled: usageBusy,
               style: { padding: '5px 10px', fontSize: '12px', background: 'transparent', border: '1px solid rgba(128,128,128,0.4)', color: 'inherit', borderRadius: '5px', cursor: usageBusy ? 'wait' : 'pointer' },
-            }, '清空当日统计')
+            }, 'Clear Today')
           )
         ),
         usageMsg ? h('p', { style: { margin: 0, fontSize: '12px', lineHeight: 1.5 } }, usageMsg) : null,
         h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } },
-          statBox('总调用', String(usageTotal.calls)),
-          statBox('成功', String(usageTotal.ok), '#2e7d32'),
-          statBox('失败', String(usageTotal.fail), usageTotal.fail ? '#c62828' : 'inherit'),
-          statBox('自动切换', String(usageTotal.failovers), usageTotal.failovers ? '#b8860b' : 'inherit'),
-          statBox('输入 token', fmtTokens(usageTotal.inputTokens)),
-          statBox('输出 token', fmtTokens(usageTotal.outputTokens))
+          statBox('Total Calls', String(usageTotal.calls)),
+          statBox('Success', String(usageTotal.ok), '#2e7d32'),
+          statBox('Failed', String(usageTotal.fail), usageTotal.fail ? '#c62828' : 'inherit'),
+          statBox('Failovers', String(usageTotal.failovers), usageTotal.failovers ? '#b8860b' : 'inherit'),
+          statBox('Input Tokens', fmtTokens(usageTotal.inputTokens)),
+          statBox('Output Tokens', fmtTokens(usageTotal.outputTokens))
         ),
         usageMembers.length
           ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } },
@@ -718,21 +718,21 @@ window.__ModuleLoader__.load({
                 },
                   h('div', { style: { display: 'flex', gap: '6px', alignItems: 'baseline' } },
                     h('span', { style: { flex: '1 1 auto', fontSize: '12px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, String(m.id).replace(/^custom-nvidia\//, '').replace(/^nvidia\//, '')),
-                    m.failovers ? h('span', { style: { fontSize: '11px', color: '#b8860b', flex: '0 0 auto' } }, '切换 ' + m.failovers + ' 次') : h('span', { style: { fontSize: '11px', opacity: 0.6, flex: '0 0 auto' } }, '共 ' + m.calls + ' 次')
+                    m.failovers ? h('span', { style: { fontSize: '11px', color: '#b8860b', flex: '0 0 auto' } }, 'Failovers: ' + m.failovers) : h('span', { style: { fontSize: '11px', opacity: 0.6, flex: '0 0 auto' } }, 'Calls: ' + m.calls)
                   ),
                   h('div', { style: { display: 'flex', gap: '10px', fontSize: '11px', flexWrap: 'wrap', opacity: 0.85 } },
                     h('span', { style: { color: '#2e7d32' } }, '✓ ' + m.ok),
                     m.fail ? h('span', { style: { color: '#c62828' } }, '✗ ' + m.fail) : null,
-                    h('span', null, '平均首包 ' + (m.avgFirstByteMs ? m.avgFirstByteMs + 'ms' : '—')),
+                    h('span', null, 'Avg TTFB ' + (m.avgFirstByteMs ? m.avgFirstByteMs + 'ms' : '—')),
                     h('span', null, 'token ' + fmtTokens(m.inputTokens + m.outputTokens))
                   )
                 );
               })
             )
-          : h('p', { style: { margin: 0, fontSize: '12px', opacity: 0.6 } }, '今天还没有调用记录。在对话框模型选择器里选中「NVIDIA 模型组」并发起一轮对话即可产生记录。'),
+          : h('p', { style: { margin: 0, fontSize: '12px', opacity: 0.6 } }, 'No calls recorded today. Select "NVIDIA Group (Auto)" in chat to start tracking.'),
         usageLog.length
           ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: '3px', maxHeight: '260px', overflow: 'auto' } },
-              h('div', { style: { fontSize: '11px', opacity: 0.6, padding: '0 6px' } }, '最近调用（最新在上，最多 200 条）'),
+              h('div', { style: { fontSize: '11px', opacity: 0.6, padding: '0 6px' } }, 'Recent calls (newest first, up to 200)'),
               usageLog.map(function (e, i) {
                 return h('div', {
                   key: 'ul-' + i,
@@ -741,8 +741,8 @@ window.__ModuleLoader__.load({
                   h('span', { style: { flex: '0 0 58px', opacity: 0.6 } }, fmtTime(e.at)),
                   h('span', { style: { fontWeight: 600 } }, e.ok ? '✓' : '✗'),
                   h('span', { style: { flex: '1 1 120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, String(e.memberId).replace(/^custom-nvidia\//, '').replace(/^nvidia\//, '')),
-                  e.failover ? h('span', { style: { fontSize: '10px', color: '#b8860b' } }, '← 切换自 ' + String(e.failoverFrom || '').replace(/^custom-nvidia\//, '').replace(/^nvidia\//, '')) : null,
-                  e.ok ? h('span', { style: { opacity: 0.7 } }, '首包 ' + (e.firstByteMs || 0) + 'ms') : null,
+                  e.failover ? h('span', { style: { fontSize: '10px', color: '#b8860b' } }, '← from ' + String(e.failoverFrom || '').replace(/^custom-nvidia\//, '').replace(/^nvidia\//, '')) : null,
+                  e.ok ? h('span', { style: { opacity: 0.7 } }, 'TTFB ' + (e.firstByteMs || 0) + 'ms') : null,
                   (e.inputTokens || e.outputTokens) ? h('span', { style: { opacity: 0.7 } }, 'tok ' + fmtTokens(e.inputTokens) + '/' + fmtTokens(e.outputTokens)) : null,
                   e.error ? h('span', { style: { flexBasis: '100%', color: '#c62828', fontSize: '10px' } }, String(e.error).slice(0, 140)) : null
                 );
@@ -776,7 +776,7 @@ window.__ModuleLoader__.load({
       const tabBar = h('div', {
         key: 'tabs',
         style: { display: 'flex', gap: '2px', borderBottom: '1px solid rgba(128,128,128,0.3)' },
-      }, [tabButton('models', '模型库'), tabButton('group', '模型组健康'), tabButton('usage', '调用日志')]);
+      }, [tabButton('models', 'Models'), tabButton('group', 'Group Health'), tabButton('usage', 'Usage Log')]);
 
       // ---- 使用说明（方案 A：标题栏「?」→ 居中浮层）----
       const helpRow = function (label, text) {
@@ -806,7 +806,7 @@ window.__ModuleLoader__.load({
       },
         h('div', {
           role: 'dialog',
-          'aria-label': '使用说明',
+          'aria-label': 'Help',
           style: {
             width: '100%', maxWidth: '348px',
             background: 'var(--dsh-surface, #1b1d20)',
@@ -820,36 +820,36 @@ window.__ModuleLoader__.load({
           },
         },
           h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } },
-            h('span', { style: { fontSize: '15px', fontWeight: 700 } }, '使用说明'),
+            h('span', { style: { fontSize: '15px', fontWeight: 700 } }, 'Help'),
             h('button', {
               onClick: function () { setHelpOpen(false); },
-              'aria-label': '关闭使用说明',
+              'aria-label': 'Close help',
               style: { background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', display: 'flex', alignItems: 'center', padding: '2px' },
             }, h('svg', { viewBox: '0 0 24 24', width: 18, height: 18, fill: 'currentColor', 'aria-hidden': 'true' },
               h('path', { d: 'M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z' })))
           ),
           keyStatus && !keyStatus.configured
             ? h('div', { style: { fontSize: '12px', color: '#b8860b', border: '1px solid rgba(184,134,11,0.5)', background: 'rgba(184,134,11,0.08)', borderRadius: '6px', padding: '7px 10px', lineHeight: 1.5 } },
-                '尚未配置 One-Balance API Key —— 请先在上方「NVIDIA API Key」卡片粘贴保存后再继续。')
+                'One-Balance API Key is not configured — paste and save it above before continuing.')
             : null,
-          helpStep(1, '配置 Key', '粘贴 One-Balance AUTH_KEY 并保存，即与 one-balance-nvidia 路由共用凭据，不会写入配置文件或日志。'),
-          helpStep(2, '检测 → 验证 → 一键配置', '在「模型库」点「检测可用模型」，再「逐个试调用」，最后「一键配置到设置」；只有试调用通过的模型会写入 llm-pi-ai 路由。'),
-          helpStep(3, '启用自动故障转移', '在对话框模型选择器里选「NVIDIA 模型组（自动）」，请求会按实时健康排序并自动切换，无需指定首选模型。'),
-          helpStep(4, '看效果', '「模型组健康」页看熔断状态与各成员首包用时；「调用日志」页看当天总用量、各模型使用量与每次自动切换记录。'),
+          helpStep(1, 'Save Key', 'Paste your One-Balance AUTH_KEY and save; shared with the one-balance-nvidia route without writing to config files.'),
+          helpStep(2, 'Detect → Verify → Configure', 'In Models, click Detect Models, then Verify All, then One-Click Configure; only verified models are written to llm-pi-ai.'),
+          helpStep(3, 'Enable Auto-Failover', 'Pick "NVIDIA Group (Auto)" in the chat model selector to route by live health and auto-failover.'),
+          helpStep(4, 'Monitor', 'Use Group Health for cooldowns/TTFB and Usage Log for daily calls, tokens, and failover history.'),
           h('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px', borderTop: '1px solid rgba(128,128,128,0.25)', paddingTop: '10px' } },
-            h('span', { style: { fontSize: '12px', fontWeight: 700 } }, '机制要点'),
-            helpRow('故障转移', '选中成员首包超过 15 秒无响应即立刻切下一个；已有内容输出后不再切换，避免前后不连贯。'),
-            helpRow('熔断冷却', '某成员连续失败进入冷却，20 秒起指数退避、最长 5 分钟，冷却结束后自动恢复。'),
-            helpRow('能力路由', '带图片的请求只会分给支持视觉的成员（vision / vl / omni）。'),
-            helpRow('自发现', '后台每 5 分钟刷新一次模型列表，新增可用模型自动进组。'),
-            helpRow('token 计数', '上游未回传 usage 时 token 显示为 0，不影响调用本身。')
+            h('span', { style: { fontSize: '12px', fontWeight: 700 } }, 'How It Works'),
+            helpRow('Failover', 'Switches to the next member if TTFB exceeds 30s; stops switching once visible text has streamed.'),
+            helpRow('Cooldown', 'Repeated failures trigger exponential backoff (20s up to 5m) before auto-recovery.'),
+            helpRow('Vision', 'Image requests prioritize multimodal members (vision / vl / omni) with text models as fallback.'),
+            helpRow('Discovery', 'Silently refreshes the NVIDIA model catalog every 5 minutes.'),
+            helpRow('Tokens', 'Shows 0 if upstream omits usage metadata.')
           )
         )
       );
 
       // 未配置 Key：主操作按钮禁用、关键位置给出就地提示（凭据服务不可用时不做拦截）。
       const noKey = Boolean(keyStatus && !keyStatus.configured && !keyStatus.unavailable);
-      const keyHint = '尚未配置 One-Balance API Key —— 请先在上方「NVIDIA API Key」卡片粘贴保存后再继续。';
+      const keyHint = 'One-Balance API Key is not configured — paste and save it above before continuing.';
 
       return h('div', {
         className: 'nvidia-models-panel',
@@ -884,7 +884,7 @@ window.__ModuleLoader__.load({
               fill: '#76B900',
               'aria-hidden': 'true',
             }, h('path', { d: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5' })),
-            h('h2', { style: { margin: 0, fontSize: '16px', fontWeight: 600 } }, 'NVIDIA 模型'),
+            h('h2', { style: { margin: 0, fontSize: '16px', fontWeight: 600 } }, 'NVIDIA Models'),
             (function () {
               const info = updateInfo;
               const hasUpdate = Boolean(info && info.hasUpdate);
@@ -892,17 +892,17 @@ window.__ModuleLoader__.load({
               const currentVersion = info && info.currentVersion ? String(info.currentVersion).replace(/^v/, '') : null;
               let label, color;
               if (hasUpdate) {
-                label = '新版本 ↑ ' + (info.latestTag || '');
+                label = 'Update ↑ ' + (info.latestTag || '');
                 color = '230,170,0';
               } else if (currentVersion) {
                 // 已知当前版本且无新版本：一律显示版本号；网络不可达时加 ⚠ 提示可点击重试
                 label = 'v' + currentVersion + (failed ? ' ⚠' : '');
                 color = failed ? '200,120,60' : '128,128,128';
               } else if (failed) {
-                label = '检查失败 · 重试';
+                label = 'Check failed · Retry';
                 color = '200,120,60';
               } else {
-                label = updateBusy ? '检查中…' : '检查更新';
+                label = updateBusy ? 'Checking…' : 'Check updates';
                 color = '128,128,128';
               }
               return h('button', {
@@ -915,7 +915,7 @@ window.__ModuleLoader__.load({
                   }
                 },
                 disabled: updateBusy && !hasUpdate,
-                title: hasUpdate ? (info.message || '查看更新') : (currentVersion ? ('当前版本 v' + currentVersion + (failed ? '（检查更新失败，点击重试）' : '，点击重新检查')) : '检查更新'),
+                title: hasUpdate ? (info.message || 'View update') : (currentVersion ? ('Current v' + currentVersion + (failed ? ' (check failed, click to retry)' : ', click to recheck')) : 'Check updates'),
                 style: {
                   padding: '3px 9px',
                   fontSize: '11px',
@@ -934,8 +934,8 @@ window.__ModuleLoader__.load({
           h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
             h('button', {
               onClick: function () { setHelpOpen(true); },
-              'aria-label': '使用说明',
-              title: '使用说明',
+              'aria-label': 'Help',
+              title: 'Help',
               style: {
                 background: 'transparent',
                 border: '1px solid rgba(128,128,128,0.4)',
@@ -955,7 +955,7 @@ window.__ModuleLoader__.load({
             }, '?'),
             h('button', {
               onClick: onClose,
-              'aria-label': '关闭面板',
+              'aria-label': 'Close panel',
               style: {
                 background: 'transparent',
                 border: 'none',
@@ -985,16 +985,16 @@ window.__ModuleLoader__.load({
             h('span', { style: { fontSize: '13px', fontWeight: 600 } }, 'One-Balance API Key'),
             keyStatus ? (keyStatus.configured
               ? h('span', { style: { fontSize: '11px', color: '#2e7d32', border: '1px solid #2e7d32', borderRadius: '4px', padding: '1px 6px', background: 'rgba(46,125,50,0.10)' } },
-                '已配置' + (keyStatus.source ? '（' + keyStatus.source + '）' : ''))
-              : h('span', { style: { fontSize: '11px', opacity: 0.6, border: '1px dashed rgba(128,128,128,0.5)', borderRadius: '4px', padding: '1px 6px' } }, '未配置')) : null,
-            keyStatus && keyStatus.unavailable ? h('span', { style: { fontSize: '11px', color: '#b8860b' } }, '（凭据服务不可用）') : null,
+                'Configured' + (keyStatus.source ? ' (' + keyStatus.source + ')' : ''))
+              : h('span', { style: { fontSize: '11px', opacity: 0.6, border: '1px dashed rgba(128,128,128,0.5)', borderRadius: '4px', padding: '1px 6px' } }, 'Not configured')) : null,
+            keyStatus && keyStatus.unavailable ? h('span', { style: { fontSize: '11px', color: '#b8860b' } }, ' (credentials service unavailable)') : null,
           ),
           h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
             h('input', {
               type: 'password',
               value: keyInput,
               onChange: function (e) { setKeyInput(e.target.value); },
-              placeholder: '输入 One-Balance API Key（密文显示，不回显）',
+              placeholder: 'Enter One-Balance API Key (masked)',
               autoComplete: 'off',
               style: {
                 flex: 1,
@@ -1022,7 +1022,7 @@ window.__ModuleLoader__.load({
                 cursor: (keyBusy || !keyInput.trim()) ? 'wait' : 'pointer',
                 opacity: (keyBusy || !keyInput.trim()) ? 0.6 : 1,
               },
-            }, '保存 Key'),
+            }, 'Save Key'),
             keyStatus && keyStatus.configured && keyStatus.writable ? h('button', {
               onClick: clearKey,
               disabled: keyBusy,
@@ -1035,12 +1035,12 @@ window.__ModuleLoader__.load({
                 borderRadius: '6px',
                 cursor: keyBusy ? 'wait' : 'pointer',
               },
-            }, '清除') : null,
+            }, 'Clear') : null,
           ),
           h('p', { style: { margin: 0, fontSize: '11px', opacity: 0.65, lineHeight: 1.5 } },
-            'Key 保存在 Harness 凭据存储（与正式 nvidia 模型路由共用 ONE_BALANCE_API_KEY 引用），不会写入配置文件或日志；保存后下一次请求立即生效。'),
+            'Stored in Harness credentials under ONE_BALANCE_API_KEY (never written to config files or logs); active on next request.'),
           noKey ? h('p', { style: { margin: 0, fontSize: '12px', lineHeight: 1.5, color: '#b8860b' } },
-            '⚠ 未配置 Key：检测、试调用与「模型组」都不可用，请先在上方保存 Key。') : null,
+            '⚠ Key not configured: Verification and Group failover require saving your One-Balance API Key above.') : null,
           keyMsg ? h('p', { style: { margin: 0, fontSize: '12px', lineHeight: 1.5 } }, keyMsg) : null,
         ),
         noKey ? noKeyWarning(keyHint) : null,
@@ -1069,7 +1069,7 @@ window.__ModuleLoader__.load({
               cursor: (detecting || verifying || noKey) ? 'not-allowed' : 'pointer',
               opacity: (detecting || verifying || noKey) ? 0.6 : 1,
             },
-          }, detecting ? '检测中…' : '检测可用模型'),
+          }, detecting ? 'Detecting…' : 'Detect Models'),
           h('button', {
             onClick: verifyAll,
             disabled: detecting || verifying || models.length === 0 || noKey,
@@ -1085,7 +1085,7 @@ window.__ModuleLoader__.load({
               cursor: (detecting || verifying || models.length === 0 || noKey) ? 'not-allowed' : 'pointer',
               opacity: noKey ? 0.6 : 1,
             },
-          }, verifying ? '试调用中…' : '逐个试调用'),
+          }, verifying ? 'Verifying…' : 'Verify All'),
           verifying ? h('button', {
             onClick: stopVerify,
             style: {
@@ -1098,7 +1098,7 @@ window.__ModuleLoader__.load({
               borderRadius: '6px',
               cursor: 'pointer',
             },
-          }, '停止') : null,
+          }, 'Stop') : null,
           h('button', {
             onClick: configureModels,
             disabled: configuring || detecting || verifying || noKey,
@@ -1113,7 +1113,7 @@ window.__ModuleLoader__.load({
               cursor: (configuring || detecting || verifying || noKey) ? 'not-allowed' : 'pointer',
               opacity: (configuring || detecting || verifying || noKey) ? 0.6 : 1,
             },
-          }, configuring ? '配置中…' : '一键配置到设置')
+          }, configuring ? 'Configuring…' : 'One-Click Configure'
         ),
         message ? h('div', {
           key: 'message',
@@ -1172,8 +1172,8 @@ window.__ModuleLoader__.load({
         },
           h('svg', { viewBox: '0 0 24 24', width: 48, height: 48, fill: 'currentColor', 'aria-hidden': 'true' },
             h('path', { d: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5' })),
-          h('p', { style: { margin: 0, fontSize: '14px' } }, '尚未检测模型'),
-          h('p', { style: { margin: 0, fontSize: '12px' } }, '点击「检测可用模型」获取列表，再点「逐个试调用」验证真实可用性')
+          h('p', { style: { margin: 0, fontSize: '14px' } }, 'No models detected yet'),
+          h('p', { style: { margin: 0, fontSize: '12px' } }, 'Click "Detect Models" to fetch the catalog, then "Verify All" to test via One-Balance'))
         )
         ]) : (tab === 'usage' ? h('div', {
           key: 'usagePane',
@@ -1196,7 +1196,7 @@ window.__ModuleLoader__.load({
             name: 'sidebar.panellist',
             id: panelId,
             order: 100,
-            label: 'NVIDIA 模型',
+            label: 'NVIDIA Models',
           }, NvidiaPanelIcon);
         });
 

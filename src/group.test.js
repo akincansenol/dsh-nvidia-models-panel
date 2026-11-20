@@ -165,7 +165,7 @@ test('createGroupAdapter: listModels/resolveModel/prepareCall/stream shapes', as
     streamChild: (opts) => (async function* () { yield chunkText('x:' + opts.model); yield chunkFinishStop; })(),
     health: createHealthRegistry(),
   });
-  assert.deepEqual(adapter.providerInfo('nvidia-group'), { id: 'nvidia-group', name: 'NVIDIA 模型组' });
+  assert.deepEqual(adapter.providerInfo('nvidia-group'), { id: 'nvidia-group', name: 'NVIDIA Group' });
   const list = await adapter.listModels('nvidia-group');
   // First entry is the virtual "auto" member, then the real group members.
   assert.equal(list[0].id, AUTO_MEMBER_ID);

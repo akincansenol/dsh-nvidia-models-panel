@@ -112,7 +112,7 @@ test('group adapter: providerInfo/listModels/resolveModel/stream work end-to-end
   plugin.apply(ctx);
   const adapter = registered.adapters.get('nvidia-group');
   const info = adapter.providerInfo('nvidia-group');
-  assert.deepEqual(info, { id: 'nvidia-group', name: 'NVIDIA 模型组' });
+  assert.deepEqual(info, { id: 'nvidia-group', name: 'NVIDIA Group' });
   const models = await adapter.listModels('nvidia-group');
   // auto member + 2 real members
   assert.equal(models.length, 3);

@@ -52,44 +52,44 @@ export function inferContextWindow(id, upstreamCtx) {
 
 /** Chinese blurbs per publisher prefix, used to build per-model descriptions. */
 const PUBLISHER_BLURBS = {
-  nvidia: 'NVIDIA 官方',
-  'nv-mistralai': 'NVIDIA 与 Mistral 联合优化',
-  meta: 'Meta Llama 系列',
-  'deepseek-ai': 'DeepSeek 系列',
-  'z-ai': '智谱 GLM 系列',
-  moonshotai: '月之暗面 Kimi 系列',
-  qwen: '阿里通义千问系列',
-  google: 'Google 开源模型',
-  microsoft: '微软 Phi 系列',
-  mistralai: 'Mistral AI 系列',
-  openai: 'OpenAI 开源模型',
-  '01-ai': '零一万物 Yi 系列',
-  ai21labs: 'AI21 Jamba 系列',
-  ibm: 'IBM Granite 系列',
-  bigcode: 'BigCode 代码模型',
-  databricks: 'Databricks 模型',
-  snowflake: 'Snowflake Arctic 系列',
-  writer: 'Writer Palmyra 系列',
-  poolside: 'Poolside 代码模型',
-  minimaxai: 'MiniMax 系列',
-  'stepfun-ai': '阶跃星辰系列',
-  zyphra: 'Zyphra 系列',
-  adept: 'Adept 模型',
-  aisingapore: 'AI Singapore SEA-LION 系列',
+  nvidia: 'NVIDIA Official',
+  'nv-mistralai': 'NVIDIA & Mistral co-optimized',
+  meta: 'Meta Llama series',
+  'deepseek-ai': 'DeepSeek series',
+  'z-ai': 'Zhipu GLM series',
+  moonshotai: 'Moonshot Kimi series',
+  qwen: 'Alibaba Qwen series',
+  google: 'Google open models',
+  microsoft: 'Microsoft Phi series',
+  mistralai: 'Mistral AI series',
+  openai: 'OpenAI open models',
+  '01-ai': '01.AI Yi series',
+  ai21labs: 'AI21 Jamba series',
+  ibm: 'IBM Granite series',
+  bigcode: 'BigCode coding models',
+  databricks: 'Databricks models',
+  snowflake: 'Snowflake Arctic series',
+  writer: 'Writer Palmyra series',
+  poolside: 'Poolside coding models',
+  minimaxai: 'MiniMax series',
+  'stepfun-ai': 'StepFun series',
+  zyphra: 'Zyphra series',
+  adept: 'Adept models',
+  aisingapore: 'AI Singapore SEA-LION series',
 };
 
 /** Built-in fallback shown when the upstream API is unreachable. */
 const BUILTIN_MODELS = [
-  { id: 'nvidia/llama-3.1-nemotron-70b-instruct', name: 'Llama 3.1 Nemotron 70B', description: 'NVIDIA 旗舰推理模型，擅长复杂推理、编码与数学' },
-  { id: 'nvidia/nemotron-3-ultra-550b-a55b', name: 'Nemotron 3 Ultra 550B', description: 'NVIDIA 官方超大参数模型，推理与编码能力极强' },
-  { id: 'nvidia/nemotron-3-super-120b-a12b', name: 'Nemotron 3 Super 120B', description: 'NVIDIA 官方高性能均衡型，适合企业级任务' },
-  { id: 'nvidia/nemotron-3.5-lightning-30b-a3b', name: 'Nemotron 3.5 Lightning 30B', description: 'NVIDIA 官方轻量高速 MoE，响应快成本低' },
-  { id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', name: 'Nemotron 3 Nano Omni 30B', description: 'NVIDIA 官方全模态模型，支持文本与图像' },
-  { id: 'deepseek-ai/deepseek-v4.1-flash', name: 'DeepSeek V4.1 Flash', description: 'DeepSeek 系列，长上下文，支持文本与图像' },
-  { id: 'moonshotai/kimi-k3', name: 'Kimi K3', description: '月之暗面 Kimi 系列，百万级上下文窗口' },
-  { id: 'z-ai/glm-5.3', name: 'GLM-5.3', description: '智谱 GLM 系列，强推理与长上下文' },
-  { id: 'meta/llama-3.2-90b-vision-instruct', name: 'Llama 3.2 90B Vision', description: 'Meta Llama 系列，多语言视觉理解' },
-  { id: 'mistralai/mistral-7b-instruct-v0.3', name: 'Mistral 7B Instruct v0.3', description: 'Mistral AI 系列，轻量高效通用模型' },
+  { id: 'nvidia/llama-3.1-nemotron-70b-instruct', name: 'Llama 3.1 Nemotron 70B', description: 'NVIDIA flagship reasoning model for complex reasoning, coding, and math' },
+  { id: 'nvidia/nemotron-3-ultra-550b-a55b', name: 'Nemotron 3 Ultra 550B', description: 'NVIDIA ultra-large model with strong reasoning and coding' },
+  { id: 'nvidia/nemotron-3-super-120b-a12b', name: 'Nemotron 3 Super 120B', description: 'NVIDIA balanced high-performance model for enterprise tasks' },
+  { id: 'nvidia/nemotron-3.5-lightning-30b-a3b', name: 'Nemotron 3.5 Lightning 30B', description: 'NVIDIA lightweight fast MoE model' },
+  { id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', name: 'Nemotron 3 Nano Omni 30B', description: 'NVIDIA omni-modal model supporting text and image' },
+  { id: 'deepseek-ai/deepseek-v4.1-flash', name: 'DeepSeek V4.1 Flash', description: 'DeepSeek long-context model supporting text and image' },
+  { id: 'moonshotai/kimi-k3', name: 'Kimi K3', description: 'Moonshot Kimi series with 1M context window' },
+  { id: 'z-ai/glm-5.3', name: 'GLM-5.3', description: 'Zhipu GLM series with strong reasoning and long context' },
+  { id: 'meta/llama-3.2-90b-vision-instruct', name: 'Llama 3.2 90B Vision', description: 'Meta Llama multilingual vision-language model' },
+  { id: 'mistralai/mistral-7b-instruct-v0.3', name: 'Mistral 7B Instruct v0.3', description: 'Mistral AI lightweight general-purpose model' },
 ];
 
 /** Build a short Chinese blurb for one model id. */
@@ -97,14 +97,14 @@ function describeModel(id) {
   const slash = id.indexOf('/');
   const publisher = slash > 0 ? id.slice(0, slash) : '';
   const bare = slash > 0 ? id.slice(slash + 1) : id;
-  const who = PUBLISHER_BLURBS[publisher] || (publisher ? publisher + ' 发布' : 'NVIDIA NIM 托管');
-  let kind = '通用大语言模型';
+  const who = PUBLISHER_BLURBS[publisher] || (publisher ? 'Published by ' + publisher : 'Hosted on NVIDIA NIM');
+  let kind = 'general-purpose LLM';
   const lower = bare.toLowerCase();
-  if (/vision|vl|omni|diffusion|image/.test(lower)) kind = '支持视觉/多模态输入';
-  else if (/coder|code/.test(lower)) kind = '专攻代码生成与补全';
-  else if (/embed|rerank|reward/.test(lower)) kind = '检索/评测类模型';
-  else if (/reason|thinking|r1/.test(lower)) kind = '强化推理能力';
-  return who + '，' + kind + '。';
+  if (/vision|vl|omni|diffusion|image/.test(lower)) kind = 'vision/multimodal input';
+  else if (/coder|code/.test(lower)) kind = 'code generation & completion';
+  else if (/embed|rerank|reward/.test(lower)) kind = 'retrieval/evaluation model';
+  else if (/reason|thinking|r1/.test(lower)) kind = 'enhanced reasoning';
+  return who + ' — ' + kind + '.';
 }
 
 /** True for model families the chat-completions probe cannot meaningfully call. */
@@ -216,12 +216,12 @@ function describeEntries(entries) {
 async function configureNvidiaModels(ctx, probeResults) {
   const configEditor = await withConfigEditor(ctx, (editor) => editor);
   if (!configEditor) {
-    return { ok: false, error: 'configEditor 服务不可用，无法写入配置' };
+    return { ok: false, error: 'configEditor service unavailable; cannot write config' };
   }
   const detection = await detectNvidiaModels();
   const allModels = detection.models;
   if (detection.source === 'live') lastDetectedModels = normalizeGroupMembers(allModels);
-  const source = detection.source === 'live' ? 'NVIDIA API 实时检测' : '内置目录';
+  const source = detection.source === 'live' ? 'NVIDIA API live detection' : 'built-in catalog';
   let available;
   let droppedUnavailable = 0;
   let droppedNonChat = 0;
@@ -233,7 +233,7 @@ async function configureNvidiaModels(ctx, probeResults) {
     droppedNonChat = allModels.length - available.length;
   }
   if (available.length === 0) {
-    return { ok: false, error: '没有试调用通过的可用模型，未写入。请先确认 API Key 有效后重新试调用。' };
+    return { ok: false, error: 'No verified available models to write. Ensure your One-Balance API Key is valid and re-run verification.' };
   }
   // Locate the llm-pi-ai row by identity across every plausible field and
   // fall back to the configuration() projection before giving up.
@@ -241,10 +241,10 @@ async function configureNvidiaModels(ctx, probeResults) {
   try {
     entries = configEditor.entries();
   } catch (error) {
-    return { ok: false, error: '读取配置条目失败：' + String((error && error.message) || error) };
+    return { ok: false, error: 'Failed to read config entries: ' + String((error && error.message) || error) };
   }
   if (!Array.isArray(entries)) {
-    return { ok: false, error: '配置条目返回异常：' + JSON.stringify(entries).slice(0, 200) };
+    return { ok: false, error: 'Unexpected config entries payload: ' + JSON.stringify(entries).slice(0, 200) };
   }
   let configs = [];
   try {
@@ -263,7 +263,7 @@ async function configureNvidiaModels(ctx, probeResults) {
   if (!llmEntry) {
     return {
       ok: false,
-      error: '未找到 llm-pi-ai 配置项（entries 共 ' + entries.length + ' 条）。诊断信息：' + JSON.stringify(describeEntries(entries)).slice(0, 900),
+      error: 'llm-pi-ai config entry not found (' + entries.length + ' entries). Diagnostics: ' + JSON.stringify(describeEntries(entries)).slice(0, 900),
     };
   }
   let existingCount = 0;
@@ -300,14 +300,14 @@ async function configureNvidiaModels(ctx, probeResults) {
       };
     });
   } catch (error) {
-    return { ok: false, error: '写入配置失败：' + String((error && error.message) || error) };
+    return { ok: false, error: 'Failed to write config: ' + String((error && error.message) || error) };
   }
   const droppedNote = droppedUnavailable > 0
-    ? '，剔除 ' + droppedUnavailable + ' 个试调用未通过的模型'
-    : (droppedNonChat > 0 ? '，跳过 ' + droppedNonChat + ' 个非对话模型' : '');
+    ? ', excluded ' + droppedUnavailable + ' failed models'
+    : (droppedNonChat > 0 ? ', skipped ' + droppedNonChat + ' non-chat models' : '');
   return {
     ok: true,
-    message: '已' + (existingCount ? '更新（原 ' + existingCount + ' 个模型）' : '写入') + ' nvidia 供应商：' + nextModels.length + ' 个【试调用可用】模型' + droppedNote + '（来源：' + source + '）。模型名称后附简介，现在对话框的模型选择器即可选用；凭据与正式路由共用，下一次请求即生效。',
+    message: (existingCount ? 'Updated (was ' + existingCount + ') ' : 'Configured ') + 'one-balance-nvidia provider: ' + nextModels.length + ' verified models' + droppedNote + ' (source: ' + source + '). Available immediately in the chat model picker.',
   };
 }
 
@@ -321,12 +321,12 @@ async function detectNvidiaModels() {
     /** if (apiKey) headers.authorization = 'Bearer ' + apiKey; */
     const upstream = await fetch(NIM_MODELS_URL, { headers, signal: controller.signal });
     if (!upstream.ok) {
-      return { ok: false, reason: 'NVIDIA API 返回 HTTP ' + upstream.status, source: 'builtin', models: BUILTIN_MODELS };
+      return { ok: false, reason: 'NVIDIA API returned HTTP ' + upstream.status, source: 'builtin', models: BUILTIN_MODELS };
     }
     const data = await upstream.json();
     const raw = Array.isArray(data && data.data) ? data.data : [];
     if (raw.length === 0) {
-      return { ok: false, reason: 'NVIDIA API 返回了空列表', source: 'builtin', models: BUILTIN_MODELS };
+      return { ok: false, reason: 'NVIDIA API returned an empty list', source: 'builtin', models: BUILTIN_MODELS };
     }
     const models = raw.map((m) => ({
       id: String(m.id || ''),
@@ -339,8 +339,8 @@ async function detectNvidiaModels() {
     models.sort((a, b) => a.id.localeCompare(b.id));
     return { ok: true, source: 'live', count: models.length, models };
   } catch (error) {
-    const reason = error && error.name === 'AbortError' ? '连接超时（15 秒）' : String((error && error.message) || error);
-    return { ok: false, reason: '无法访问 NVIDIA API：' + reason, source: 'builtin', models: BUILTIN_MODELS };
+    const reason = error && error.name === 'AbortError' ? 'Connection timeout (15s)' : String((error && error.message) || error);
+    return { ok: false, reason: 'Cannot reach NVIDIA API: ' + reason, source: 'builtin', models: BUILTIN_MODELS };
   } finally {
     clearTimeout(timer);
   }
@@ -422,47 +422,47 @@ async function extractErrorHint(response) {
  */
 async function testNvidiaModel(id) {
   if (isNonChatModel(id)) {
-    return { id, status: 'skip', detail: '非对话模型（embed/rerank 等），未试调用' };
+    return { id, status: 'skip', detail: 'Non-chat model (embed/rerank/etc.), skipped' };
   }
   try {
     const apiKey = await resolveKeyFromContext();
-    let probe = await probeStreaming(id, apiKey, 1024, 30000);
+    let probe = await probeStreaming(id, apiKey, 1024, 60000);
     if (probe.kind === 'http-error' && (probe.response.status === 400 || probe.response.status === 422)) {
       const firstHint = await extractErrorHint(probe.response);
-      probe = await probeStreaming(id, apiKey, 8192, 45000);
+      probe = await probeStreaming(id, apiKey, 8192, 90000);
       if (probe.kind === 'ok-stream' || probe.kind === 'ok-no-stream') {
-        return { id, status: 'ok', detail: '试调用成功（需较大输出预算）' };
+        return { id, status: 'ok', detail: 'Verified (higher output budget required)' };
       }
       if (probe.kind === 'http-error') {
         const hint = (await extractErrorHint(probe.response)) || firstHint;
-        const map = { 401: '鉴权失败（401）——需要有效的 NVIDIA API Key', 403: '无权限（403）——当前密钥无权调用该模型', 404: '模型不可用（404）——端点不接受该模型', 429: '限流（429）——请求过于频繁或配额耗尽' };
+        const map = { 401: 'Auth failed (401) — valid One-Balance API Key required', 403: 'Forbidden (403) — invalid key or insufficient permissions', 404: 'Model unavailable (404) — endpoint rejected this model', 429: 'Rate limited (429) — too many requests or quota exhausted' };
         const known = map[probe.response.status];
-        return { id, status: 'fail', detail: (known || '调用失败（HTTP ' + probe.response.status + '）') + hint };
+        return { id, status: 'fail', detail: (known || 'Request failed (HTTP ' + probe.response.status + ')') + hint };
       }
       const abortRetry = probe.error && probe.error.name === 'AbortError';
-      return { id, status: 'fail', detail: abortRetry ? '首包超时（45 秒无响应）' : '网络错误：' + String((probe.error && probe.error.message) || probe.error) };
+      return { id, status: 'fail', detail: abortRetry ? 'First-byte timeout (90s)' : 'Network error: ' + String((probe.error && probe.error.message) || probe.error) };
     }
     if (probe.kind === 'ok-stream') {
-      return { id, status: 'ok', detail: '试调用成功（流式首包确认）' };
+      return { id, status: 'ok', detail: 'Verified (first streamed byte confirmed)' };
     }
     if (probe.kind === 'ok-no-stream') {
-      return { id, status: 'ok', detail: '端点返回 200（无流式数据）' };
+      return { id, status: 'ok', detail: 'Endpoint returned 200 (no stream data)' };
     }
     if (probe.kind === 'http-error') {
       const hint = await extractErrorHint(probe.response);
       const map = {
-        401: '鉴权失败（401）——需要有效的 NVIDIA API Key',
-        403: '无权限（403）——当前密钥无权调用该模型',
-        404: '模型不可用（404）——端点不接受该模型',
-        429: '限流（429）——请求过于频繁或配额耗尽',
+        401: 'Auth failed (401) — valid One-Balance API Key required',
+        403: 'Forbidden (403) — invalid key or insufficient permissions',
+        404: 'Model unavailable (404) — endpoint rejected this model',
+        429: 'Rate limited (429) — too many requests or quota exhausted',
       };
       const known = map[probe.response.status];
-      return { id, status: 'fail', detail: (known || '调用失败（HTTP ' + probe.response.status + '）') + hint };
+      return { id, status: 'fail', detail: (known || 'Request failed (HTTP ' + probe.response.status + ')') + hint };
     }
     const abortFirst = probe.error && probe.error.name === 'AbortError';
-    return { id, status: 'fail', detail: abortFirst ? '首包超时（30 秒无响应）' : '网络错误：' + String((probe.error && probe.error.message) || probe.error) };
+    return { id, status: 'fail', detail: abortFirst ? 'First-byte timeout (60s)' : 'Network error: ' + String((probe.error && probe.error.message) || probe.error) };
   } catch (error) {
-    return { id, status: 'fail', detail: '网络错误：' + String((error && error.message) || error) };
+    return { id, status: 'fail', detail: 'Network error: ' + String((error && error.message) || error) };
   }
 }
 
@@ -547,8 +547,8 @@ const groupUsage = createUsageRegistry({ retentionDays: 7, maxLogPerDay: 200, st
 
 /** 组运行参数（内存态，可被 setGroupConfig 覆盖）。 */
 const groupConfig = {
-  firstByteTimeoutMs: 15000,
-  firstTextTimeoutMs: 30000,
+  firstByteTimeoutMs: 30000,
+  firstTextTimeoutMs: 60000,
   preferredModel: '',
   autoRefreshMs: 300000,
 };
@@ -588,10 +588,10 @@ let lastDetectedModels = [];
  * 让模型组在用户尚未「一键配置」时也能立即工作（自愈开箱即用）。
  */
 const AUTO_SEED_MODELS = [
-  { id: 'nvidia/nemotron-3.5-lightning-30b-a3b', name: 'Nemotron 3.5 Lightning 30B', description: 'NVIDIA 官方轻量高速 MoE', inputModalities: ['text'] },
-  { id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', name: 'Nemotron 3 Nano Omni 30B', description: 'NVIDIA 官方全模态模型', inputModalities: ['text', 'image'] },
-  { id: 'nvidia/nemotron-3-ultra-550b-a55b', name: 'Nemotron 3 Ultra 550B', description: 'NVIDIA 官方超大参数模型', inputModalities: ['text'] },
-  { id: 'deepseek-ai/deepseek-v4.1-flash', name: 'DeepSeek V4.1 Flash', description: 'DeepSeek 高速长上下文', inputModalities: ['text', 'image'] },
+  { id: 'nvidia/nemotron-3.5-lightning-30b-a3b', name: 'Nemotron 3.5 Lightning 30B', description: 'NVIDIA lightweight fast MoE', inputModalities: ['text'] },
+  { id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', name: 'Nemotron 3 Nano Omni 30B', description: 'NVIDIA omni-modal model', inputModalities: ['text', 'image'] },
+  { id: 'nvidia/nemotron-3-ultra-550b-a55b', name: 'Nemotron 3 Ultra 550B', description: 'NVIDIA ultra-large model', inputModalities: ['text'] },
+  { id: 'deepseek-ai/deepseek-v4.1-flash', name: 'DeepSeek V4.1 Flash', description: 'DeepSeek fast long-context model', inputModalities: ['text', 'image'] },
 ];
 
 /** 把一组模型条目（id/name/description）规整成组成员形态。 */
@@ -695,7 +695,7 @@ function appendGroupEvent(ctx, sessionId, type, data) {
 }
 
 /** 没有 Key / 凭据失效时给出的统一可读提示。 */
-const NO_KEY_MESSAGE = 'One-Balance API Key 未配置或已失效，请在 NVIDIA 模型面板顶部保存 Key 后重试。';
+const NO_KEY_MESSAGE = 'One-Balance API Key is not configured or invalid. Please save your key at the top of the NVIDIA Models panel and retry.';
 
 /**
  * 包装 llm.stream：把上游的「缺凭据 / 401 / 403」错误翻译成带 NO_API_KEY 码的
@@ -746,7 +746,7 @@ function streamChildWithFriendlyKeyErrors(llm, childOptions) {
 function buildGroupAdapter(ctx, llm) {
   return createGroupAdapter({
     groupId: 'nvidia-group',
-    groupName: 'NVIDIA 模型组',
+    groupName: 'NVIDIA Group',
     childProvider: 'one-balance-nvidia',
     getMembers: async () => {
       const members = await resolveGroupMembers(ctx);
@@ -896,16 +896,16 @@ async function probeGroup(ctx) {
   const out = [];
   for (const m of members) {
     groupHealth.recordProbeStart(m.id);
-    const probe = await probeStreaming(m.id, apiKey, 512, 8000);
+    const probe = await probeStreaming(m.id, apiKey, 512, 20000);
     if (probe.kind === 'ok-stream' || probe.kind === 'ok-no-stream') {
       groupHealth.recordSuccess(m.id, null);
       out.push({ id: m.id, status: 'ok' });
     } else {
       const detail = probe.kind === 'http-error'
-        ? '调用失败（HTTP ' + probe.response.status + '）'
+        ? 'Request failed (HTTP ' + probe.response.status + ')'
         : (probe.error && probe.error.name === 'AbortError'
-          ? '首包超时（8 秒无响应）'
-          : '网络错误：' + String((probe.error && probe.error.message) || probe.error));
+          ? 'First-byte timeout (20s)'
+          : 'Network error: ' + String((probe.error && probe.error.message) || probe.error));
       groupHealth.recordFailure(m.id, { message: detail });
       out.push({ id: m.id, status: 'fail', detail });
     }
@@ -928,7 +928,7 @@ function createNvidiaModelsRoute(ctx) {
       // keyStatus/setKey/clearKey/resetGroup/resetUsage/checkUpdate 不拦（它们本就用于修复无 Key 状态）。
       const NEED_KEY_ACTIONS = new Set(['test', 'configure', 'probeGroup', 'groupStatus', 'dockStatus', 'usageStats']);
       if (NEED_KEY_ACTIONS.has(action) && !(await hasNvidiaKey(ctx))) {
-        result = { ok: false, code: 'NO_API_KEY', message: '未配置 One-Balance API Key，请先在面板上方保存后再继续。' };
+        result = { ok: false, code: 'NO_API_KEY', message: 'One-Balance API Key is not configured. Please save your key at the top of the panel first.' };
       } else if (action === 'test' && typeof body.model === 'string' && body.model) {
         result = await testNvidiaModel(body.model);
       } else if (action === 'keyStatus') {
@@ -943,9 +943,9 @@ function createNvidiaModelsRoute(ctx) {
           return credentials.describe(NVIDIA_KEY_REF);
         });
         if (!saved || typeof saved !== 'object') {
-          result = { saved: false, error: '凭据服务不可用，无法保存' };
+          result = { saved: false, error: 'Credentials service unavailable; cannot save' };
         } else if (!saved.configured) {
-          result = { saved: false, error: '保存后校验未通过（凭据存储未确认写入）' };
+          result = { saved: false, error: 'Verification failed after saving (credential store did not confirm write)' };
         } else {
           result = { saved: true, source: saved.source || 'stored' };
         }
@@ -956,7 +956,7 @@ function createNvidiaModelsRoute(ctx) {
         });
         result = cleared && typeof cleared === 'object' && !cleared.configured
           ? { cleared: true }
-          : { cleared: false, error: '清除失败或凭据服务不可用' };
+          : { cleared: false, error: 'Failed to clear or credentials service unavailable' };
       } else if (action === 'configure') {
         result = await configureNvidiaModels(ctx, body.results);
       } else if (action === 'groupStatus') {
@@ -1058,10 +1058,10 @@ async function checkUpdate(ctx) {
   const latestTag = latestVersion ? ('v' + latestVersion.replace(/^v/, '')) : null;
   const hasUpdate = Boolean(currentVersion && latestVersion && semverGt(latestVersion, currentVersion));
   const message = hasUpdate
-    ? ('发现新版本 ' + latestTag + '，当前 ' + currentVersion)
+    ? ('New version ' + latestTag + ' available (current ' + currentVersion + ')')
     : (!reachable
-      ? '检查失败：暂时无法连接 GitHub（网络问题），请稍后重试'
-      : '已是最新版本');
+      ? 'Check failed: cannot reach GitHub, please retry later'
+      : 'Up to date');
   return {
     ok: true,
     currentVersion,
@@ -1131,22 +1131,22 @@ export function apply(ctx) {
   // NOT the plugin context — so both handlers close over the plugin ctx instead.
   disposers.push(ctx.commands.register({
     name: 'nvidia-models-detect',
-    title: '检测 NVIDIA 可用模型',
-    description: '实时查询 NVIDIA NIM API，列出当前可用模型及简介',
+    title: 'Detect NVIDIA Models',
+    description: 'Query NVIDIA NIM API and list available models with descriptions',
     handler: async () => {
       const result = await detectNvidiaModels();
       const head = result.source === 'live'
-        ? '实时检测到 ' + result.count + ' 个可用模型（来自 NVIDIA API）：'
-        : 'NVIDIA API 不可达（' + result.reason + '），以下为内置目录：';
+        ? 'Detected ' + result.count + ' models live from NVIDIA API:'
+        : 'NVIDIA API unreachable (' + result.reason + '), showing built-in catalog:'
       const list = result.models.map((m) => '- ' + m.name + ' (' + m.id + ')：' + m.description).join('\n');
-      return { kind: 'success', text: head + '\n\n' + list + '\n\n运行 /nvidia-models-configure 可将模型写入 llm-pi-ai 的 nvidia 供应商。' };
+      return { kind: 'success', text: head + '\n\n' + list + '\n\nRun /nvidia-models-configure to write models to the one-balance-nvidia provider.' };
     },
   }));
 
   disposers.push(ctx.commands.register({
     name: 'nvidia-models-configure',
-    title: '配置 NVIDIA 模型到设置',
-    description: '把检测到的模型批量写入 llm-pi-ai 的 nvidia 供应商模型列表',
+    title: 'Configure NVIDIA Models',
+    description: 'Write detected models into the llm-pi-ai one-balance-nvidia provider config',
     handler: async () => {
       const result = await configureNvidiaModels(ctx);
       return result.ok
