@@ -315,9 +315,9 @@ async function detectNvidiaModels() {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15000);
   try {
-    const apiKey = await resolveKeyFromContext();
+    /** const apiKey = await resolveKeyFromContext(); */
     const headers = { accept: 'application/json' };
-    if (apiKey) headers.authorization = 'Bearer ' + apiKey;
+    /** if (apiKey) headers.authorization = 'Bearer ' + apiKey; */
     const upstream = await fetch(NIM_MODELS_URL, { headers, signal: controller.signal });
     if (!upstream.ok) {
       return { ok: false, reason: 'NVIDIA API 返回 HTTP ' + upstream.status, source: 'builtin', models: BUILTIN_MODELS };
@@ -336,7 +336,7 @@ async function detectNvidiaModels() {
         : (Number.isFinite(m.context_length) && m.context_length > 0 ? m.context_length : undefined),
     })).filter((m) => m.id);
     models.sort((a, b) => a.id.localeCompare(b.id));
-    return { ok: true, source: 'live', count: models.length, models, keyFound: Boolean(apiKey) };
+    return { ok: true, source: 'live', count: models.length, models };
   } catch (error) {
     const reason = error && error.name === 'AbortError' ? '连接超时（15 秒）' : String((error && error.message) || error);
     return { ok: false, reason: '无法访问 NVIDIA API：' + reason, source: 'builtin', models: BUILTIN_MODELS };
@@ -631,7 +631,7 @@ async function readNvidiaConfigModels(ctx) {
       ? declared
       : inferContextWindow(m.id, declared === LEGACY_CONTEXT_WINDOW ? undefined : declared);
     return {
-      id: String(m.id || '').replace(/^custom-nvidia\//, ''),
+      id: String(m.id || ''),
       name: String(m.name || m.id || ''),
       description: String(m.description || ''),
       inputModalities: Array.isArray(m.input) ? m.input : (m.inputModalities || ['text']),
@@ -738,6 +738,7 @@ function buildGroupAdapter(ctx, llm) {
   return createGroupAdapter({
     groupId: 'nvidia-group',
     groupName: 'NVIDIA 模型组',
+    childProvider: 'one-balance-nvidia',
     getMembers: async () => {
       const members = await resolveGroupMembers(ctx);
       return members;
@@ -912,7 +913,7 @@ function createNvidiaModelsRoute(ctx) {
       let result;
       // 需要 Key 的 action 在没有配置 Key 时统一早退，给出一致的可读提示。
       // keyStatus/setKey/clearKey/resetGroup/resetUsage/checkUpdate 不拦（它们本就用于修复无 Key 状态）。
-      const NEED_KEY_ACTIONS = new Set(['detect', 'test', 'configure', 'probeGroup', 'groupStatus', 'dockStatus', 'usageStats']);
+      const NEED_KEY_ACTIONS = new Set(['test', 'configure', 'probeGroup', 'groupStatus', 'dockStatus', 'usageStats']);
       if (NEED_KEY_ACTIONS.has(action) && !(await hasNvidiaKey(ctx))) {
         result = { ok: false, code: 'NO_API_KEY', message: '未配置 NVIDIA API Key，请先在面板上方保存后再继续。' };
       } else if (action === 'test' && typeof body.model === 'string' && body.model) {
