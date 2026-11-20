@@ -291,6 +291,7 @@ async function configureNvidiaModels(ctx, probeResults) {
           ...baseProviders,
           'one-balance-nvidia': {
             ...baseOneBalanceNvidia,
+            api: baseOneBalanceNvidia.api || 'openai-completions',
             apiKeyEnv: 'ONE_BALANCE_API_KEY',
             baseUrl: 'https://one-balance.eplani.com.tr/api/compat',
             models: nextModels,
@@ -396,9 +397,17 @@ async function probeStreaming(id, apiKey, maxTokens, timeoutMs) {
 /** Extract NVIDIA's error message from a failed response, best-effort. */
 async function extractErrorHint(response) {
   try {
-    const errBody = await response.json();
-    const msg = errBody && errBody.detail ? String(errBody.detail) : (errBody && errBody.message ? String(errBody.message) : '');
-    return msg ? '：' + msg.slice(0, 160) : '';
+    const raw = (await response.text()).trim();
+    if (!raw) return '';
+    try {
+      const errBody = JSON.parse(raw);
+      const msg = errBody && (errBody.detail || errBody.message || (errBody.error && errBody.error.message))
+        ? String(errBody.detail || errBody.message || errBody.error.message)
+        : raw;
+      return msg ? '：' + msg.slice(0, 160) : '';
+    } catch {
+      return '：' + raw.slice(0, 160);
+    }
   } catch {
     return '';
   }
@@ -686,7 +695,7 @@ function appendGroupEvent(ctx, sessionId, type, data) {
 }
 
 /** 没有 Key / 凭据失效时给出的统一可读提示。 */
-const NO_KEY_MESSAGE = 'NVIDIA API Key 未配置或已失效，请在 NVIDIA 模型面板顶部保存 Key 后重试。';
+const NO_KEY_MESSAGE = 'One-Balance API Key 未配置或已失效，请在 NVIDIA 模型面板顶部保存 Key 后重试。';
 
 /**
  * 包装 llm.stream：把上游的「缺凭据 / 401 / 403」错误翻译成带 NO_API_KEY 码的
@@ -746,7 +755,11 @@ function buildGroupAdapter(ctx, llm) {
     // 用注入到的 llm 服务实例直接调用（外层 ctx 未声明注入 llm，不能在请求时访问 ctx.llm）。
     // 同时把「没有 Key / 凭据失效」的上游错误翻译成可读提示——这种错误对所有成员都一样，
     // 由 group.js 识别为致命错误直接停止故障转移，避免无谓地逐个重试。
-    streamChild: (childOptions) => streamChildWithFriendlyKeyErrors(llm, childOptions),
+    streamChild: (childOptions) => {
+      const m = String((childOptions && childOptions.model) || '');
+      const normalized = m && !m.startsWith('custom-nvidia/') ? 'custom-nvidia/' + m : m;
+      return streamChildWithFriendlyKeyErrors(llm, normalized ? { ...childOptions, model: normalized } : childOptions);
+    },
     health: groupHealth,
     firstByteTimeoutMs: () => groupConfig.firstByteTimeoutMs,
     firstTextTimeoutMs: () => groupConfig.firstTextTimeoutMs,
@@ -915,7 +928,7 @@ function createNvidiaModelsRoute(ctx) {
       // keyStatus/setKey/clearKey/resetGroup/resetUsage/checkUpdate 不拦（它们本就用于修复无 Key 状态）。
       const NEED_KEY_ACTIONS = new Set(['test', 'configure', 'probeGroup', 'groupStatus', 'dockStatus', 'usageStats']);
       if (NEED_KEY_ACTIONS.has(action) && !(await hasNvidiaKey(ctx))) {
-        result = { ok: false, code: 'NO_API_KEY', message: '未配置 NVIDIA API Key，请先在面板上方保存后再继续。' };
+        result = { ok: false, code: 'NO_API_KEY', message: '未配置 One-Balance API Key，请先在面板上方保存后再继续。' };
       } else if (action === 'test' && typeof body.model === 'string' && body.model) {
         result = await testNvidiaModel(body.model);
       } else if (action === 'keyStatus') {
@@ -995,7 +1008,7 @@ function createNvidiaModelsRoute(ctx) {
 }
 
 /** Command: write the NVIDIA model list into the llm-pi-ai nvidia provider. */
-const GITHUB_REPO = 'windxxf/dsh-nvidia-models-panel';
+const GITHUB_REPO = 'akincansenol/dsh-nvidia-models-panel';
 const GITHUB_RELEASES_URL = 'https://github.com/' + GITHUB_REPO + '/releases';
 
 /**

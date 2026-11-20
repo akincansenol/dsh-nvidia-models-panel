@@ -288,7 +288,7 @@ window.__ModuleLoader__.load({
           });
           const data = await response.json();
           if (data && data.cleared) {
-            setKeyMsg('已清除存储的 Key（环境变量 NVIDIA_API_KEY 若存在将重新生效）。');
+            setKeyMsg('已清除存储的 Key（环境变量 ONE_BALANCE_API_KEY 若存在将重新生效）。');
             await refreshKeyStatus();
           } else {
             setKeyMsg('清除失败：' + ((data && data.error) || ('HTTP ' + response.status)));
@@ -717,7 +717,7 @@ window.__ModuleLoader__.load({
                   style: { display: 'flex', flexDirection: 'column', gap: '3px', padding: '6px 8px', background: 'rgba(128,128,128,0.06)', border: '1px solid rgba(128,128,128,0.18)', borderRadius: '4px' },
                 },
                   h('div', { style: { display: 'flex', gap: '6px', alignItems: 'baseline' } },
-                    h('span', { style: { flex: '1 1 auto', fontSize: '12px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, String(m.id).replace(/^nvidia\//, '')),
+                    h('span', { style: { flex: '1 1 auto', fontSize: '12px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, String(m.id).replace(/^custom-nvidia\//, '').replace(/^nvidia\//, '')),
                     m.failovers ? h('span', { style: { fontSize: '11px', color: '#b8860b', flex: '0 0 auto' } }, '切换 ' + m.failovers + ' 次') : h('span', { style: { fontSize: '11px', opacity: 0.6, flex: '0 0 auto' } }, '共 ' + m.calls + ' 次')
                   ),
                   h('div', { style: { display: 'flex', gap: '10px', fontSize: '11px', flexWrap: 'wrap', opacity: 0.85 } },
@@ -740,8 +740,8 @@ window.__ModuleLoader__.load({
                 },
                   h('span', { style: { flex: '0 0 58px', opacity: 0.6 } }, fmtTime(e.at)),
                   h('span', { style: { fontWeight: 600 } }, e.ok ? '✓' : '✗'),
-                  h('span', { style: { flex: '1 1 120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, String(e.memberId).replace(/^nvidia\//, '')),
-                  e.failover ? h('span', { style: { fontSize: '10px', color: '#b8860b' } }, '← 切换自 ' + String(e.failoverFrom || '').replace(/^nvidia\//, '')) : null,
+                  h('span', { style: { flex: '1 1 120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, String(e.memberId).replace(/^custom-nvidia\//, '').replace(/^nvidia\//, '')),
+                  e.failover ? h('span', { style: { fontSize: '10px', color: '#b8860b' } }, '← 切换自 ' + String(e.failoverFrom || '').replace(/^custom-nvidia\//, '').replace(/^nvidia\//, '')) : null,
                   e.ok ? h('span', { style: { opacity: 0.7 } }, '首包 ' + (e.firstByteMs || 0) + 'ms') : null,
                   (e.inputTokens || e.outputTokens) ? h('span', { style: { opacity: 0.7 } }, 'tok ' + fmtTokens(e.inputTokens) + '/' + fmtTokens(e.outputTokens)) : null,
                   e.error ? h('span', { style: { flexBasis: '100%', color: '#c62828', fontSize: '10px' } }, String(e.error).slice(0, 140)) : null
@@ -830,9 +830,9 @@ window.__ModuleLoader__.load({
           ),
           keyStatus && !keyStatus.configured
             ? h('div', { style: { fontSize: '12px', color: '#b8860b', border: '1px solid rgba(184,134,11,0.5)', background: 'rgba(184,134,11,0.08)', borderRadius: '6px', padding: '7px 10px', lineHeight: 1.5 } },
-                '尚未配置 NVIDIA API Key —— 请先在上方「NVIDIA API Key」卡片粘贴保存后再继续。')
+                '尚未配置 One-Balance API Key —— 请先在上方「NVIDIA API Key」卡片粘贴保存后再继续。')
             : null,
-          helpStep(1, '配置 Key', '粘贴 nvapi-… Key 并保存，即与正式 nvidia 路由共用凭据，不会写入配置文件或日志。'),
+          helpStep(1, '配置 Key', '粘贴 One-Balance AUTH_KEY 并保存，即与 one-balance-nvidia 路由共用凭据，不会写入配置文件或日志。'),
           helpStep(2, '检测 → 验证 → 一键配置', '在「模型库」点「检测可用模型」，再「逐个试调用」，最后「一键配置到设置」；只有试调用通过的模型会写入 llm-pi-ai 路由。'),
           helpStep(3, '启用自动故障转移', '在对话框模型选择器里选「NVIDIA 模型组（自动）」，请求会按实时健康排序并自动切换，无需指定首选模型。'),
           helpStep(4, '看效果', '「模型组健康」页看熔断状态与各成员首包用时；「调用日志」页看当天总用量、各模型使用量与每次自动切换记录。'),
@@ -849,7 +849,7 @@ window.__ModuleLoader__.load({
 
       // 未配置 Key：主操作按钮禁用、关键位置给出就地提示（凭据服务不可用时不做拦截）。
       const noKey = Boolean(keyStatus && !keyStatus.configured && !keyStatus.unavailable);
-      const keyHint = '尚未配置 NVIDIA API Key —— 请先在上方「NVIDIA API Key」卡片粘贴保存后再继续。';
+      const keyHint = '尚未配置 One-Balance API Key —— 请先在上方「NVIDIA API Key」卡片粘贴保存后再继续。';
 
       return h('div', {
         className: 'nvidia-models-panel',
@@ -908,7 +908,7 @@ window.__ModuleLoader__.load({
               return h('button', {
                 onClick: function () {
                   if (hasUpdate) {
-                    const url = info.latestUrl || 'https://github.com/windxxf/dsh-nvidia-models-panel/releases/latest';
+                    const url = info.latestUrl || 'https://github.com/akincansenol/dsh-nvidia-models-panel/releases/latest';
                     window.open(url, '_blank', 'noopener,noreferrer');
                   } else if (!updateBusy) {
                     refreshUpdateCheck();
@@ -982,7 +982,7 @@ window.__ModuleLoader__.load({
           },
         },
           h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' } },
-            h('span', { style: { fontSize: '13px', fontWeight: 600 } }, 'NVIDIA API Key'),
+            h('span', { style: { fontSize: '13px', fontWeight: 600 } }, 'One-Balance API Key'),
             keyStatus ? (keyStatus.configured
               ? h('span', { style: { fontSize: '11px', color: '#2e7d32', border: '1px solid #2e7d32', borderRadius: '4px', padding: '1px 6px', background: 'rgba(46,125,50,0.10)' } },
                 '已配置' + (keyStatus.source ? '（' + keyStatus.source + '）' : ''))
@@ -994,7 +994,7 @@ window.__ModuleLoader__.load({
               type: 'password',
               value: keyInput,
               onChange: function (e) { setKeyInput(e.target.value); },
-              placeholder: '输入 nvapi-… Key（密文显示，不回显）',
+              placeholder: '输入 One-Balance API Key（密文显示，不回显）',
               autoComplete: 'off',
               style: {
                 flex: 1,
@@ -1038,7 +1038,7 @@ window.__ModuleLoader__.load({
             }, '清除') : null,
           ),
           h('p', { style: { margin: 0, fontSize: '11px', opacity: 0.65, lineHeight: 1.5 } },
-            'Key 保存在 Harness 凭据存储（与正式 nvidia 模型路由共用 NVIDIA_API_KEY 引用），不会写入配置文件或日志；保存后下一次请求立即生效。'),
+            'Key 保存在 Harness 凭据存储（与正式 nvidia 模型路由共用 ONE_BALANCE_API_KEY 引用），不会写入配置文件或日志；保存后下一次请求立即生效。'),
           noKey ? h('p', { style: { margin: 0, fontSize: '12px', lineHeight: 1.5, color: '#b8860b' } },
             '⚠ 未配置 Key：检测、试调用与「模型组」都不可用，请先在上方保存 Key。') : null,
           keyMsg ? h('p', { style: { margin: 0, fontSize: '12px', lineHeight: 1.5 } }, keyMsg) : null,

@@ -17,7 +17,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/windxxf/dsh-nvidia-models-panel.git"
+    "url": "git+https://github.com/akincansenol/dsh-nvidia-models-panel.git"
   },
   "exports": {
     ".": "./src/index.js",

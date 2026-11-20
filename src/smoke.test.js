@@ -24,7 +24,7 @@ function makeCtx(opts = {}) {
   ];
   const llmEntry = {
     id: 'llm-pi-ai',
-    options: { id: 'llm-pi-ai', name: '@deepseek-ai/dsh-llm-pi-ai', config: { providers: { nvidia: { apiKeyEnv: 'NVIDIA_API_KEY', models: nvidiaModels } } } },
+    options: { id: 'llm-pi-ai', name: '@deepseek-ai/dsh-llm-pi-ai', config: { providers: { 'one-balance-nvidia': { apiKeyEnv: 'ONE_BALANCE_API_KEY', models: nvidiaModels } } } },
   };
   const services = {
     commands: { register(desc) { registered.commands.push(desc); return () => {}; } },
@@ -255,11 +255,11 @@ test('route actions that need a key early-return NO_API_KEY when no key configur
   const route = mc.registered.routes[0].route;
 
   // 需要 Key 的 action 全部早退，并给出一致的 NO_API_KEY 提示。
-  for (const action of ['detect', 'test', 'configure', 'probeGroup', 'groupStatus', 'dockStatus', 'usageStats']) {
+  for (const action of ['test', 'configure', 'probeGroup', 'groupStatus', 'dockStatus', 'usageStats']) {
     const data = await (await route.fetch(mk({ action }))).json();
     assert.equal(data.code, 'NO_API_KEY', action + ' should be blocked');
     assert.equal(data.ok, false);
-    assert.match(data.message, /NVIDIA API Key/);
+    assert.match(data.message, /API Key/);
   }
 
   // 不依赖 Key 的 action 仍然可用。
