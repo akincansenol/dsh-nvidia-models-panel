@@ -18,7 +18,7 @@ export const inject = ['commands', 'configEditor'];
 
 /** NVIDIA NIM public endpoints (model list is anonymous-readable; completions need a key). */
 const NIM_MODELS_URL = 'https://integrate.api.nvidia.com/v1/models';
-const NIM_COMPLETIONS_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
+const ONE_BALANCE_COMPLETIONS_URL = 'https://one-balance.eplani.com.tr/api/compat/chat/completions';
 
 /**
  * 旧版「一键配置」给所有模型硬编码的上下文窗口（131072 = 128K）。
@@ -267,12 +267,12 @@ async function configureNvidiaModels(ctx, probeResults) {
     };
   }
   let existingCount = 0;
-  if (llmHit && llmHit.override && llmHit.override.providers && llmHit.override.providers.nvidia) {
-    const models = llmHit.override.providers.nvidia.models;
+  if (llmHit && llmHit.override?.providers?.['one-balance-nvidia']) {
+    const models = llmHit.override.providers['one-balance-nvidia'].models;
     existingCount = Array.isArray(models) ? models.length : 0;
   }
   const nextModels = available.map((m) => ({
-    id: m.id,
+    id: 'custom-nvidia/' + m.id,
     name: m.name + ' - ' + m.description,
     contextWindow: inferContextWindow(m.id, m.upstreamCtx),
     maxTokens: 8192,
@@ -283,14 +283,16 @@ async function configureNvidiaModels(ctx, probeResults) {
       // Start from inherited ∪ override so unrelated providers and fields survive.
       const base = { ...(inherited || {}), ...(current || {}) };
       const baseProviders = base.providers || {};
-      const baseNvidia = baseProviders.nvidia || {};
+      const baseOneBalanceNvidia =
+        baseProviders['one-balance-nvidia'] || {};
       return {
         ...base,
         providers: {
           ...baseProviders,
-          nvidia: {
-            ...baseNvidia,
-            apiKeyEnv: baseNvidia.apiKeyEnv || 'NVIDIA_API_KEY',
+          'one-balance-nvidia': {
+            ...baseOneBalanceNvidia,
+            apiKeyEnv: 'ONE_BALANCE_API_KEY',
+            baseUrl: 'https://one-balance.eplani.com.tr/api/compat',
             models: nextModels,
           },
         },
@@ -355,12 +357,12 @@ async function probeStreaming(id, apiKey, maxTokens, timeoutMs) {
   try {
     const headers = { 'content-type': 'application/json', accept: 'text/event-stream' };
     if (apiKey) headers.authorization = 'Bearer ' + apiKey;
-    const response = await fetch(NIM_COMPLETIONS_URL, {
+    const response = await fetch(ONE_BALANCE_COMPLETIONS_URL, {
       method: 'POST',
       headers,
       signal: controller.signal,
       body: JSON.stringify({
-        model: id,
+        model: id.startsWith('custom-nvidia/') ? id : 'custom-nvidia/' + id,
         messages: [{ role: 'user', content: 'ping' }],
         max_tokens: maxTokens,
         stream: true,
@@ -485,7 +487,7 @@ async function readJsonBody(request) {
 }
 
 /** The credential reference this panel manages (matches the llm-pi-ai nvidia route). */
-const NVIDIA_KEY_REF = 'NVIDIA_API_KEY';
+const NVIDIA_KEY_REF = 'ONE_BALANCE_API_KEY';
 
 /* ───────────────────────────── NVIDIA 模型组（自愈式故障转移） ───────────────────────────── */
 
@@ -619,8 +621,8 @@ async function readNvidiaConfigModels(ctx) {
     const llmEntry = entries.find(isLlmPiAiEntry);
     if (llmEntry) llmHit = { entry: llmEntry, override: llmEntry.options && llmEntry.options.config };
   }
-  const nvidia = llmHit && llmHit.override && llmHit.override.providers && llmHit.override.providers.nvidia;
-  const models = nvidia && Array.isArray(nvidia.models) ? nvidia.models : [];
+  const provider = llmHit?.override?.providers?.['one-balance-nvidia'];
+  const models = provider && Array.isArray(provider.models) ? provider.models : [];
   return models.map((m) => {
     const declared = Number.isFinite(m.contextWindow) ? m.contextWindow : (Number.isFinite(m.context) ? m.context : null);
     // 旧版「一键配置」把所有模型写成 131072；这类遗留值按模型族自愈为更合理的窗口，
@@ -629,7 +631,7 @@ async function readNvidiaConfigModels(ctx) {
       ? declared
       : inferContextWindow(m.id, declared === LEGACY_CONTEXT_WINDOW ? undefined : declared);
     return {
-      id: String(m.id || ''),
+      id: String(m.id || '').replace(/^custom-nvidia\//, ''),
       name: String(m.name || m.id || ''),
       description: String(m.description || ''),
       inputModalities: Array.isArray(m.input) ? m.input : (m.inputModalities || ['text']),
@@ -1149,7 +1151,7 @@ export function apply(ctx) {
             done((async () => {
               const credentials = scoped.credentials;
               try {
-                const hit = await credentials.resolve('NVIDIA_API_KEY');
+                const hit = await credentials.resolve('ONE_BALANCE_API_KEY');
                 if (hit && typeof hit.value === 'string' && hit.value.trim()) return hit.value.trim();
               } catch {
                 // The reference form may be rejected; fall through to env.
@@ -1165,7 +1167,7 @@ export function apply(ctx) {
     } catch {
       // Credential seam unavailable; env fallback below.
     }
-    const fromEnv = process.env.NVIDIA_API_KEY;
+    const fromEnv = process.env.ONE_BALANCE_API_KEY;
     return fromEnv && fromEnv.trim() ? fromEnv.trim() : '';
   };
 
