@@ -1,104 +1,53 @@
-# dsh-nvidia-models-panel
+# dsh-nvidia-models-panel (One-Balance Edition)
 
-[DeepSeek Harness](https://github.com/deepseek-ai) 插件：在侧边栏提供「Nvidia 模型」面板。
+A [DeepSeek Harness](https://github.com/deepseek-ai) (DSH) sidebar plugin forked from [`windxxf/dsh-nvidia-models-panel`](https://github.com/windxxf/dsh-nvidia-models-panel) to route NVIDIA NIM inference through [`akincansenol/one-balance`](https://github.com/akincansenol/one-balance) and Cloudflare AI Gateway.
 
-- **检测**：拉取 NVIDIA NIM 当前可用的全部模型（`/v1/models`）
-- **验证**：逐个模型真实发起对话试调用（流式首字节探测，对思考类模型也准确），标出「可用 / 不可用」
-- **保存 Key**：在面板内直接保存 NVIDIA API Key（存入本机 profile 凭据，不写入任何配置文件或代码）
-- **一键配置**：把试调用通过的模型写入 设置 → 模型 → nvidia 供应商目录，立即出现在对话框模型选择器中
-- **NVIDIA 模型组（自愈）**：新增一个「NVIDIA 模型组」虚拟供应商——把它选为当前模型后，运行时若首个模型首包超时/报错，会**自动在同一请求内切换到组内下一个可用模型**，无需重试、不会中断对话
-- **健康看板**：面板内实时显示每个成员模型的状态（可用/失败/冷却中）、首包耗时、连续失败次数与最近错误，并可一键探测、重置熔断
-- **调用日志**：面板内「调用日志」标签页展示当天的整体调用量、自动切换次数、各模型使用量与 token 消耗，以及最近调用明细（含「← 切换自」来源），直观看到故障转移是否发生
+## Prerequisites (`one-balance`)
 
-## 安装
+This plugin requires a working [`akincansenol/one-balance`](https://github.com/akincansenol/one-balance) deployment for key rotation, rate-limit cooldowns, and request forwarding:
 
-在 DeepSeek Harness 会话里对助手说（任选其一）：
+1. Deploy [`akincansenol/one-balance`](https://github.com/akincansenol/one-balance) on Cloudflare Workers + D1.
+2. In your Cloudflare AI Gateway, add a **Custom Provider** with slug **`custom-nvidia`** and Base URL `https://integrate.api.nvidia.com/v1`.
+3. Add your NVIDIA NIM API keys into `one-balance` under the `nvidia` provider.
+4. *(Self-hosting)* Update `ONE_BALANCE_COMPLETIONS_URL` and `baseUrl` in `src/index.js` if you are using your own `one-balance` Worker URL instead of `https://one-balance.eplani.com.tr/api/compat`.
 
-**方式 A · GitHub 直装（最简单）**
+## Features
 
-> 用 plugin_manager 的 install_bundle 安装 github:windxxf/dsh-nvidia-models-panel
+- **Detect Models**: Fetches the live model catalog anonymously from NVIDIA NIM (`https://integrate.api.nvidia.com/v1/models` — no API key required for listing).
+- **Verify All**: Probes each chat model via `one-balance` using a streaming first-byte check (60s initial / 90s retry timeout to tolerate NVIDIA queueing).
+- **Save Key**: Stores your `ONE_BALANCE_API_KEY` (`AUTH_KEY`) in DSH's credential store (never written to config files or logs).
+- **One-Click Configure**: Writes verified models (prefixed with `custom-nvidia/`) into `@deepseek-ai/dsh-llm-pi-ai` under the `one-balance-nvidia` provider.
+- **NVIDIA Group (`nvidia-group`)**: Virtual auto-failover provider with **NVIDIA Group (Auto)** (`__auto__`), circuit-breaker cooldowns (20s–5m exponential backoff), 30s first-byte / 60s first-text watchdogs, multimodal-aware soft routing, and `EMPTY_ANSWER` protection for reasoning models.
+- **Group Health & Usage Log**: Real-time member health, manual probe/reset controls, daily call/token/failover logs persisted to `$DSH_PROFILE_DIR/nvidia-usage.json`, and a composer dock badge.
 
-**方式 B · Release 包安装**
+## Installation
 
-> 用 plugin_manager 的 install_bundle 安装 https://github.com/windxxf/dsh-nvidia-models-panel/releases/latest/download/dsh-nvidia-models-panel-1.0.0.tgz
+In DeepSeek Harness (`plugin_manager` → `install_bundle`):
 
-**方式 C · 克隆安装**
-
-```powershell
-git clone https://github.com/windxxf/dsh-nvidia-models-panel.git
+```text
+github:akincansenol/dsh-nvidia-models-panel
 ```
 
-> 用 plugin_manager 的 install_bundle 安装目录 <克隆到的绝对路径>
+Or install from a local clone:
 
-安装完成后刷新页面即可。
+```bash
+git clone https://github.com/akincansenol/dsh-nvidia-models-panel.git
+```
 
-## 使用
+Refresh the page after enabling the plugin.
 
-1. 打开侧边栏「Nvidia 模型」面板
-2. 粘贴 [NVIDIA API Key](https://build.nvidia.com/) 并保存（只需一次，保存在本机）
-3. 点击「检测」获取可用模型列表 → 「验证」逐个试调用
-4. 点击「一键配置」，试调用通过的模型即写入 nvidia 供应商目录，可在对话模型选择器中直接选用
+## Usage
 
-> **未配置 Key 时**：面板顶部会显示黄色提示条，API Key 卡片给出提醒，「检测 / 逐个试调用 / 一键配置」按钮会置灰并给出悬浮说明；此时在对话框里选「NVIDIA 模型组（自动）」也会立即收到「NVIDIA API Key 未配置或已失效，请在 NVIDIA 模型面板顶部保存 Key 后重试」的明确报错，而不是对组内每个模型逐个超时重试。保存 Key 后一切自动恢复。
+1. Open **NVIDIA Models** in the sidebar.
+2. Paste your One-Balance `AUTH_KEY` and click **Save Key**.
+3. Click **Detect Models** → **Verify All** → **One-Click Configure**.
+4. Select **NVIDIA Group (Auto)** (or any configured `one-balance-nvidia` model) in the chat model picker.
 
-## NVIDIA 模型组（自动切换 / 自愈）
+## Requirements
 
-除了单个模型，插件还注册了一个虚拟供应商 **「NVIDIA 模型组」**（provider id `nvidia-group`）。
-
-**最省心的用法：直接选「NVIDIA 模型组（自动）」**。模型选择器里该组的第一项就是一个虚拟的「自动」条目（id `__auto__`），选它即可——它不指定首选，完全按实时健康度挑最优成员，失败则自动切下一个。你也可以选组内某个**具体模型**：选中的那个作为「首选」，仍然保留其余成员作为故障转移后备（因此即使首选卡住也只会多等一个首包超时的时间）。
-
-1. 在对话的模型选择器里选 **「NVIDIA 模型组（自动）」**（或组内某个具体模型），把它设为当前模型
-2. 之后每次请求，插件都会按「健康度」排序依次尝试组成员：
-   - 对每个成员设 **首包看门狗**（默认 15 秒，可在面板 `setGroupConfig` 调整）：首包迟迟不来就立即放弃、换下一个成员，**不再傻等 30 秒**
-   - 再设一道 **首段正文看门狗**（默认 30 秒）：首包已到、却迟迟给不出正文（一直只有思考内容）也会中止并换下一个成员。这道看门狗**无条件生效**——哪怕组里只剩最后一个成员，也不会让你干等好几分钟
-   - 只有当上一个成员**完全没有输出正文**时才切换（已输出正文则如实报错，不会拼接错乱）
-   - **两轮兜底**：第 1 轮只试「未冷却」成员；若这些成员全都没产出正文，第 2 轮会把仍在冷却的成员也当最后手段补试一遍，尽量避免空手而归
-3. 失败成员进入**熔断冷却**（连续失败 ≥2 次起，指数退避 20s→40s→…，上限 5 分钟），冷却期内被跳过，避免反复踩坏模型
-4. 全部成员都不可用时，才抛出最后一个真实错误（或「全部成员均在冷却」）
-5. **能力感知路由（软过滤）**：含图片输入的请求会把多模态（`input` 含 `image`）成员**优先**排到最前面，但组内其余成员**仍作为后备保留**——绝不会因为有图片就把组员砍到只剩一两个。万一纯文本成员真的收到图片，上游返回的 400（`multimodal ... not enabled`）会被识别为「能力不符」直接换下一个成员，且**不计入熔断**。这样多轮图片会话不会把可用成员饿死（旧版硬过滤会把 12 个成员砍到只剩 2 个，一个抖动就整轮失败）
-6. **上下文窗口按真实值声明**：`/v1/models` 会上报 `context_window` 的模型（如 deepseek-v4.1-flash 报 1M）就用真值；未上报的按模型族给合理值（长上下文族 1M、其余对话族 256K），**不再一律写 128K**。若某成员确实装不下这一轮请求（返回 `CONTEXT_WINDOW_EXCEEDED`），视为「能力不符」直接换下一个成员，且**不计入熔断**（模型本身没问题，只是这次请求太长）；这样长会话下不会再被误判成致命错误。
-7. **空回答自动切换 + 思考型模型降级**：「自动」模式下重推理模型（id 含 `reasoning`/`thinking`/`omni`/`debate`）会排在普通模型之后，默认不会被优先选中。即便它真的被选中，只要它把输出预算全烧在「思考内容」上、一个正文都没产出就撞到 `max-tokens`，插件会**丢弃这段空回答、静默切到下一个成员**，不向你抛半截内容、也不计入熔断。**即使这是组里最后一个可用成员（没有备份可切），也绝不把纯思考当成回答交给你**——而是明确报「模型未产出正文（输出预算耗尽在思考内容上）」，让你重试或改用非推理模型。这样就不会再出现「跑了好几分钟、什么回答都没有、最后报『已达到输出 token 上限』」。
-
-**组成员从哪来**（自动发现，开箱即用）：已「一键配置」过的模型 → 最近一次「检测」到的对话模型 → 内置种子模型。后台还会每 5 分钟静默刷新一次目录（有 API Key 时），自动跟上新上架的模型。专用模型（embed / rerank / reward / diffusion，以及 guard / safety / calibration / parse / translate 这类非对话模型）会自动从组成员里剔除，避免它们占着故障转移的位置、每一轮都失败。
-
-**健康看板**：面板顶部有「模型库 / 模型组健康 / 调用日志」三个标签页切换。「模型库」页放检测/试调用/一键配置等主操作；「模型组健康」页实时展示每个成员的状态徽标、冷却剩余、首包耗时、连续失败次数与最近错误，按钮「探测模型组」会对每个成员做一次快速首包探测并刷新健康表，「重置」可解除单个成员的熔断。健康表是**进程级**缓存（所有会话共享）；插件每次加载/重载时会**自动清空**旧健康状态（失败计数与冷却），避免升级前排下的熔断在升级后继续误伤刚修好的成员——真正的上游不可用仍会被实时探测与故障转移照常兜底。
-
-**调用日志**：第三个标签页「调用日志」把模型组当天每次尝试都记下来——顶部是今日总调用 / 成功 / 失败 / **自动切换次数** / 输入输出 token 汇总，中间是按模型的用量表（调用数、成功、失败、平均首包、token），底部是最近调用明细（时间、成员、✓/✗、首包、耗时、token、错误，以及该次是否为「← 切换自 X」）。这样即使对话界面不显示切换（故障转移发生在同一次请求内部、模型 id 未变），也能在面板里直观看到切换是否发生、各模型用了多少。日志按天分桶（本地日期，最多保留 7 天、每天最近 200 条），可「清空当日统计」。
-
-**日志持久化与自动清理**：调用日志不再只存在内存里，会写入 DSH 配置目录下的 `nvidia-usage.json`（`DSH_PROFILE_DIR/nvidia-usage.json`，默认 `~/.dsh/profiles/<profile>/nvidia-usage.json`），采用「全量快照 + 原子写（tmp + rename）」，插件加载时自动读回，因此**重启 DSH、重载插件都不会再丢失当天日志**。每次写入/读回前都会自动清理：只保留最近 7 天的分桶、每天只留最近 200 条明细；损坏或缺失的文件会被安全忽略并从头开始。文件放在配置目录而非插件目录，因此市场重装/升级插件（会替换 `node_modules` 实体目录）也不会影响历史日志。测试环境下（`node --test`）自动禁用文件写入，不会污染真实数据。
-
-**使用说明**：面板标题栏右侧有 `?` 按钮，点开是居中浮层说明：三步上手（配置 Key → 检测/验证/一键配置 → 对话框选「NVIDIA 模型组（自动）」）、机制要点（故障转移 / 熔断冷却 / 能力路由 / 自发现 / token 计数）以及常见问题；未配置 Key 时浮层顶部会提示先配置。浮层限定在面板内（点击遮罩或 ✕ 关闭），不占常驻空间。
-
-> 说明：模型组是一个**独立虚拟供应商**（`nvidia-group`），它内部通过 `provider: 'nvidia'` 调用真实模型，因此需要先保存好 NVIDIA API Key。「NVIDIA 模型组」是否出现在模型选择器中，取决于宿主是否暴露了 `llm` 服务（DeepSeek Harness ≥ 0.2.1 默认具备）。
-
-## 说明
-
-- 零 npm 依赖：全部能力由 Harness 宿主提供，无需构建步骤
-- API Key 保存在各电脑自己的 profile 凭据里，不随仓库/安装包迁移，换机需重新输入
-- 「一键配置」写入当前 profile 的 `cordis.patch.yml`（llm-pi-ai 条目的 `providers.nvidia.models`），可重复点击，每次以最新验证结果为准
-- 需要 DeepSeek Harness ≥ 0.2.1-rc.2
+- DeepSeek Harness `>= 0.2.1-rc.2`
+- Zero npm dependencies (all runtime services provided by DSH)
 
 ## License
 
 [MIT](LICENSE)
-
-## 新版本检测
-
-面板标题栏右侧有一个版本检测胶囊按钮，自动检查 GitHub 上是否有更新（读取 `windxxf/dsh-nvidia-models-panel` 远端 `HEAD/package.json` 的 version，与本地比较——用 raw 通道，不吃 GitHub REST API 匿名限流；结果缓存 30 分钟）。
-
-- 胶囊按钮三态：有新版本显示橙色「新版本 ↑ vX.Y.Z」（点击跳 GitHub Releases 页）；网络不通显示「检查失败 · 重试」；已是最新显示灰色「已是最新」。
-- 随时可点胶囊按钮手动重新检查（检查中显示「检查中…」）。
-- 检测在面板挂载时执行一次（8 秒超时，失败重试一次）；不再静默跳过，成功/失败/最新都有明确反馈。
-- 本机是 `link:` 安装时市场不会提示更新，所以这个面板内的检测是主要的版本提醒方式。
-
-## 输入框模型组徽标
-
-在对话主输入框上方（与「待办」「队列」同一个 dock 栏）会显示一个轻量徽标，让你不用打开面板就能看到模型组当前的实际状态：
-
-- **平时（正常回答中）**：绿色胶囊 `⚡ <当前真正出正文的模型> · 切换 N 次 · 熔断 M`，显示的是**实际产出正文的那个成员**（不是你选的「自动」），加累计切换次数与当前熔断成员数。
-- **刚发生自动切换**：橙色高亮 `⚡ <当前模型> ← 从 <来源模型> 切换 · 切换 N 次`，6 秒后自动回落到常态绿色。
-- **未使用模型组 / 已切换到别的模型**：徽标完全不显示，平时不打扰。徽标会读取当前会话最新的模型路由，一旦你在对话框把模型从「NVIDIA 模型组」切到其它模型（如 DeepSeek），徽标会自动隐藏；切回模型组后再次出现。
-
-点徽标会跳到面板的「调用日志」标签页查看明细（若面板未打开则只记录意图，不会强行弹出侧栏）。徽标数据来自进程级共享状态（重启归零），每 3 秒刷新一次。
-
-> 徽标右边缘会在运行时按输入框的实际右边缘自动对齐（测量 `[data-composer-input]` 所在的输入框卡片），适配宿主不同的宽度/缩放设置；窗口尺寸变化后会持续校准。

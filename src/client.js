@@ -1113,7 +1113,7 @@ window.__ModuleLoader__.load({
               cursor: (configuring || detecting || verifying || noKey) ? 'not-allowed' : 'pointer',
               opacity: (configuring || detecting || verifying || noKey) ? 0.6 : 1,
             },
-          }, configuring ? 'Configuring…' : 'One-Click Configure'
+          }, configuring ? 'Configuring…' : 'One-Click Configure')
         ),
         message ? h('div', {
           key: 'message',
@@ -1173,7 +1173,7 @@ window.__ModuleLoader__.load({
           h('svg', { viewBox: '0 0 24 24', width: 48, height: 48, fill: 'currentColor', 'aria-hidden': 'true' },
             h('path', { d: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5' })),
           h('p', { style: { margin: 0, fontSize: '14px' } }, 'No models detected yet'),
-          h('p', { style: { margin: 0, fontSize: '12px' } }, 'Click "Detect Models" to fetch the catalog, then "Verify All" to test via One-Balance'))
+          h('p', { style: { margin: 0, fontSize: '12px' } }, 'Click "Detect Models" to fetch the catalog, then "Verify All" to test via One-Balance')
         )
         ]) : (tab === 'usage' ? h('div', {
           key: 'usagePane',
