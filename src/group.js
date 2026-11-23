@@ -471,6 +471,7 @@ export function createGroupAdapter(deps) {
   const adapter = {
     providerInfo(provider) { return { id: provider, name: groupName }; },
     providerRetryPolicy() { return undefined; },
+    imageRequestPricing() { return undefined; },
     async listModels(provider) {
       const members = await getMembers();
       // 虚拟「自动」成员放在第一位：用户选择它即表示「不指定首选、纯按实时健康排序」。

@@ -41,6 +41,12 @@ const DEFAULT_CONTEXT_WINDOW = 1048576;
  * @param {string} id 模型 id
  * @param {number} [upstreamCtx] 上游上报的 context_window（若有）
  */
+export function inferReasoning(id, upstreamReasoning) {
+  if (typeof upstreamReasoning === 'boolean') return upstreamReasoning;
+  const s = String(id || '');
+  return /reason|thinking|omni|r1\b|qwq|deepseek-(r1|v3\.2|v4)|kimi-k|glm-[45]|nemotron-3|minimax-m|gpt-oss|step-[35]/i.test(s);
+}
+
 export function inferContextWindow(id, upstreamCtx) {
   if (Number.isFinite(upstreamCtx) && upstreamCtx > 0) return Math.round(upstreamCtx);
   const s = String(id || '');
@@ -225,8 +231,10 @@ async function configureNvidiaModels(ctx, probeResults) {
   let available;
   let droppedUnavailable = 0;
   let droppedNonChat = 0;
+  const probeEntry = (id) => probeResults && probeResults[id];
+  const isProbeOk = (v) => v === 'ok' || (v && typeof v === 'object' && v.status === 'ok');
   if (probeResults && typeof probeResults === 'object' && Object.keys(probeResults).length > 0) {
-    available = allModels.filter((m) => probeResults[m.id] === 'ok');
+    available = allModels.filter((m) => isProbeOk(probeEntry(m.id)));
     droppedUnavailable = allModels.length - available.length;
   } else {
     available = allModels.filter((m) => !isNonChatModel(m.id));
@@ -271,13 +279,18 @@ async function configureNvidiaModels(ctx, probeResults) {
     const models = llmHit.override.providers['one-balance-nvidia'].models;
     existingCount = Array.isArray(models) ? models.length : 0;
   }
-  const nextModels = available.map((m) => ({
-    id: 'custom-nvidia/' + m.id,
-    name: m.name + ' - ' + m.description,
-    contextWindow: inferContextWindow(m.id, m.upstreamCtx),
-    maxTokens: 8192,
-    input: /vision|vl|omni|diffusion|image/i.test(m.id) ? ['text', 'image'] : ['text'],
-  }));
+  const nextModels = available.map((m) => {
+    const p = probeEntry(m.id);
+    const probedReasoning = p && typeof p === 'object' && typeof p.reasoning === 'boolean' ? p.reasoning : undefined;
+    return {
+      id: 'custom-nvidia/' + m.id,
+      name: m.name + ' - ' + m.description,
+      contextWindow: inferContextWindow(m.id, m.upstreamCtx),
+      maxTokens: 8192,
+      reasoning: inferReasoning(m.id, probedReasoning ?? m.upstreamReasoning),
+      input: /vision|vl|omni|diffusion|image/i.test(m.id) ? ['text', 'image'] : ['text'],
+    };
+  });
   try {
     await configEditor.edit(llmEntry, (current, inherited) => {
       // Start from inherited ∪ override so unrelated providers and fields survive.
@@ -335,6 +348,7 @@ async function detectNvidiaModels() {
       upstreamCtx: (Number.isFinite(m.context_window) && m.context_window > 0)
         ? m.context_window
         : (Number.isFinite(m.context_length) && m.context_length > 0 ? m.context_length : undefined),
+      upstreamReasoning: typeof m.reasoning === 'boolean' ? m.reasoning : (typeof m.supports_reasoning === 'boolean' ? m.supports_reasoning : undefined),
     })).filter((m) => m.id);
     models.sort((a, b) => a.id.localeCompare(b.id));
     return { ok: true, source: 'live', count: models.length, models };
@@ -380,9 +394,14 @@ async function probeStreaming(id, apiKey, maxTokens, timeoutMs) {
     try {
       const first = await reader.read();
       if (first && first.done) {
-        return { kind: 'ok-no-stream' };
+        return { kind: 'ok-no-stream', reasoning: false };
       }
-      return { kind: 'ok-stream' };
+      let reasoning = false;
+      try {
+        const chunkText = new TextDecoder().decode(first.value);
+        if (/"reasoning_content"|"reasoning"/.test(chunkText)) reasoning = true;
+      } catch { /* ignore decode issues */ }
+      return { kind: 'ok-stream', reasoning };
     } finally {
       try { reader.releaseLock(); } catch { /* the abort below already tore the stream down */ }
       controller.abort();
@@ -431,7 +450,7 @@ async function testNvidiaModel(id) {
       const firstHint = await extractErrorHint(probe.response);
       probe = await probeStreaming(id, apiKey, 8192, 90000);
       if (probe.kind === 'ok-stream' || probe.kind === 'ok-no-stream') {
-        return { id, status: 'ok', detail: 'Verified (higher output budget required)' };
+        return { id, status: 'ok', reasoning: Boolean(probe.reasoning), detail: 'Verified (higher output budget required)' };
       }
       if (probe.kind === 'http-error') {
         const hint = (await extractErrorHint(probe.response)) || firstHint;
@@ -443,10 +462,10 @@ async function testNvidiaModel(id) {
       return { id, status: 'fail', detail: abortRetry ? 'First-byte timeout (90s)' : 'Network error: ' + String((probe.error && probe.error.message) || probe.error) };
     }
     if (probe.kind === 'ok-stream') {
-      return { id, status: 'ok', detail: 'Verified (first streamed byte confirmed)' };
+      return { id, status: 'ok', reasoning: Boolean(probe.reasoning), detail: 'Verified (first streamed byte confirmed)' };
     }
     if (probe.kind === 'ok-no-stream') {
-      return { id, status: 'ok', detail: 'Endpoint returned 200 (no stream data)' };
+      return { id, status: 'ok', reasoning: false, detail: 'Endpoint returned 200 (no stream data)' };
     }
     if (probe.kind === 'http-error') {
       const hint = await extractErrorHint(probe.response);

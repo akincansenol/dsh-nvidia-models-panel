@@ -419,7 +419,10 @@ window.__ModuleLoader__.load({
         }
         const probePayload = {};
         for (const id of Object.keys(finalResults)) {
-          probePayload[id] = finalResults[id] && finalResults[id].status === 'ok' ? 'ok' : 'unavailable';
+          const r = finalResults[id];
+          probePayload[id] = r && r.status === 'ok'
+            ? (typeof r.reasoning === 'boolean' ? { status: 'ok', reasoning: r.reasoning } : 'ok')
+            : 'unavailable';
         }
         const okCount = Object.values(finalResults).filter(function (r) { return r && r.status === 'ok'; }).length;
         setMessage('Writing ' + okCount + ' available models to settings…');
