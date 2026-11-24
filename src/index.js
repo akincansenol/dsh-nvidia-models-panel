@@ -450,16 +450,18 @@ async function extractErrorHint(response) {
  * Availability is confirmed by the first streamed byte, so slow thinkers are
  * not misjudged as timeouts.
  */
-async function testNvidiaModel(id) {
+async function testNvidiaModel(id, customTimeoutMs) {
+  const t1 = Number.isFinite(customTimeoutMs) && customTimeoutMs >= 5000 ? Math.min(180000, Math.round(customTimeoutMs)) : 60000;
+  const t2 = Math.min(180000, Math.max(90000, Math.round(t1 * 1.5)));
   if (isNonChatModel(id)) {
     return { id, status: 'skip', detail: 'Non-chat model (embed/rerank/etc.), skipped' };
   }
   try {
     const apiKey = await resolveKeyFromContext();
-    let probe = await probeStreaming(id, apiKey, 1024, 60000);
+    let probe = await probeStreaming(id, apiKey, 1024, t1);
     if (probe.kind === 'http-error' && (probe.response.status === 400 || probe.response.status === 422)) {
       const firstHint = await extractErrorHint(probe.response);
-      probe = await probeStreaming(id, apiKey, 8192, 90000);
+      probe = await probeStreaming(id, apiKey, 8192, t2);
       if (probe.kind === 'ok-stream' || probe.kind === 'ok-no-stream') {
         return { id, status: 'ok', reasoning: Boolean(probe.reasoning), detail: 'Verified (higher output budget required)' };
       }
@@ -470,7 +472,7 @@ async function testNvidiaModel(id) {
         return { id, status: 'fail', detail: (known || 'Request failed (HTTP ' + probe.response.status + ')') + hint };
       }
       const abortRetry = probe.error && probe.error.name === 'AbortError';
-      return { id, status: 'fail', detail: abortRetry ? 'First-byte timeout (90s)' : 'Network error: ' + String((probe.error && probe.error.message) || probe.error) };
+      return { id, status: 'fail', detail: abortRetry ? 'First-byte timeout (' + Math.round(t2 / 1000) + 's)' : 'Network error: ' + String((probe.error && probe.error.message) || probe.error) };
     }
     if (probe.kind === 'ok-stream') {
       return { id, status: 'ok', reasoning: Boolean(probe.reasoning), detail: 'Verified (first streamed byte confirmed)' };
@@ -490,7 +492,7 @@ async function testNvidiaModel(id) {
       return { id, status: 'fail', detail: (known || 'Request failed (HTTP ' + probe.response.status + ')') + hint };
     }
     const abortFirst = probe.error && probe.error.name === 'AbortError';
-    return { id, status: 'fail', detail: abortFirst ? 'First-byte timeout (60s)' : 'Network error: ' + String((probe.error && probe.error.message) || probe.error) };
+    return { id, status: 'fail', detail: abortFirst ? 'First-byte timeout (' + Math.round(t1 / 1000) + 's)' : 'Network error: ' + String((probe.error && probe.error.message) || probe.error) };
   } catch (error) {
     return { id, status: 'fail', detail: 'Network error: ' + String((error && error.message) || error) };
   }
@@ -960,7 +962,7 @@ function createNvidiaModelsRoute(ctx) {
       if (NEED_KEY_ACTIONS.has(action) && !(await hasNvidiaKey(ctx))) {
         result = { ok: false, code: 'NO_API_KEY', message: 'One-Balance API Key is not configured. Please save your key at the top of the panel first.' };
       } else if (action === 'test' && typeof body.model === 'string' && body.model) {
-        result = await testNvidiaModel(body.model);
+        result = await testNvidiaModel(body.model, Number(body.timeoutMs));
       } else if (action === 'keyStatus') {
         const info = await withCredentials(ctx, (credentials) => credentials.describe(NVIDIA_KEY_REF));
         result = info && typeof info === 'object'

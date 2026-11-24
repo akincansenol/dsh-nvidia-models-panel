@@ -223,6 +223,7 @@ window.__ModuleLoader__.load({
       const [verifying, setVerifying] = useState(false);
       const [message, setMessage] = useState('');
       const [results, setResults] = useState({});
+      const [forcedIds, setForcedIds] = useState({});
       const [tab, setTab] = useState('models');
       const cancelRef = useRef(false);
 
@@ -336,14 +337,17 @@ window.__ModuleLoader__.load({
       }, []);
 
       /** Probe every listed model (shared by the verify button and configure). */
-      const runVerification = useCallback(async function (list) {
+      const runVerification = useCallback(async function (list, opts) {
         setVerifying(true);
         cancelRef.current = false;
         const queue = list.map(function (m) { return m.id; });
         const finalResults = {};
         let done = 0;
         const total = list.length;
-        setResults({});
+        const o = opts || {};
+        const concurrency = o.concurrency || VERIFY_CONCURRENCY;
+        const timeoutMs = o.timeoutMs;
+        if (!o.keepExisting) setResults({});
         for (const id of queue) { finalResults[id] = { status: 'testing' }; setOne(id, { status: 'testing' }); }
         setMessage('Verifying models (concurrency ' + VERIFY_CONCURRENCY + ', first-byte stream check)… 0/' + total);
 
@@ -357,7 +361,7 @@ window.__ModuleLoader__.load({
               const response = await fetch('/api/nvidia-models', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ action: 'test', model: id }),
+                body: JSON.stringify(timeoutMs ? { action: 'test', model: id, timeoutMs } : { action: 'test', model: id }),
               });
               if (!response.ok) {
                 outcome = { status: 'fail', detail: 'Probe failed (HTTP ' + response.status + ')' };
@@ -376,11 +380,32 @@ window.__ModuleLoader__.load({
         }
 
         const workers = [];
-        for (let i = 0; i < VERIFY_CONCURRENCY; i += 1) workers.push(worker());
+        for (let i = 0; i < concurrency; i += 1) workers.push(worker());
         await Promise.all(workers);
         setVerifying(false);
         return finalResults;
       }, [setOne]);
+
+      const verifyFailed = useCallback(async function () {
+        if (verifying || models.length === 0) return;
+        const failed = models.filter(function (m) {
+          const r = results[m.id];
+          return r && r.status === 'fail';
+        });
+        if (failed.length === 0) return;
+        const out = await runVerification(failed, { keepExisting: true, concurrency: 2, timeoutMs: 120000 });
+        const okCount = Object.values(out).filter(function (r) { return r && r.status === 'ok'; }).length;
+        setMessage('Re-test complete (120s timeout): ' + okCount + '/' + failed.length + ' recovered. You can also Force Include any remaining queued models.');
+      }, [models, results, verifying, runVerification]);
+
+      const toggleForceInclude = useCallback(function (id) {
+        setForcedIds(function (prev) {
+          const next = { ...prev };
+          if (next[id]) delete next[id];
+          else next[id] = true;
+          return next;
+        });
+      }, []);
 
       const verifyAll = useCallback(async function () {
         if (verifying || models.length === 0) return;
@@ -420,11 +445,14 @@ window.__ModuleLoader__.load({
         const probePayload = {};
         for (const id of Object.keys(finalResults)) {
           const r = finalResults[id];
-          probePayload[id] = r && r.status === 'ok'
-            ? (typeof r.reasoning === 'boolean' ? { status: 'ok', reasoning: r.reasoning } : 'ok')
+          probePayload[id] = (r && r.status === 'ok') || forcedIds[id]
+            ? (r && typeof r.reasoning === 'boolean' ? { status: 'ok', reasoning: r.reasoning } : 'ok')
             : 'unavailable';
         }
-        const okCount = Object.values(finalResults).filter(function (r) { return r && r.status === 'ok'; }).length;
+        for (const id of Object.keys(forcedIds)) {
+          if (forcedIds[id] && !probePayload[id]) probePayload[id] = 'ok';
+        }
+        const okCount = Object.values(probePayload).filter(function (v) { return v === 'ok' || (v && v.status === 'ok'); }).length;
         setMessage('Writing ' + okCount + ' available models to settings…');
         try {
           const response = await fetch('/api/nvidia-models', {
@@ -448,7 +476,7 @@ window.__ModuleLoader__.load({
         } finally {
           setConfiguring(false);
         }
-      }, [configuring, models, results, runVerification]);
+      }, [configuring, models, results, forcedIds, runVerification]);
 
       const stopVerify = useCallback(function () {
         cancelRef.current = true;
@@ -1102,6 +1130,20 @@ window.__ModuleLoader__.load({
               cursor: 'pointer',
             },
           }, 'Stop') : null,
+          (!verifying && models.some(function (m) { return results[m.id] && results[m.id].status === 'fail'; })) ? h('button', {
+            onClick: verifyFailed,
+            disabled: detecting || configuring || noKey,
+            title: 'Retry failed/timed-out models with 120s timeout and lower concurrency',
+            style: {
+              padding: '7px 14px',
+              fontSize: '13px',
+              background: 'transparent',
+              color: '#b8860b',
+              border: '1px solid rgba(184,134,11,0.55)',
+              borderRadius: '6px',
+              cursor: 'pointer',
+            },
+          }, 'Re-test Failed (120s)') : null,
           h('button', {
             onClick: configureModels,
             disabled: configuring || detecting || verifying || noKey,
@@ -1152,7 +1194,21 @@ window.__ModuleLoader__.load({
               h('span', {
                 style: { fontSize: '11px', opacity: 0.65, fontFamily: 'monospace' },
                 title: model.id,
-              }, model.id)
+              }, model.id),
+              r && r.status === 'fail' ? h('button', {
+                onClick: function () { toggleForceInclude(model.id); },
+                title: 'Force include this model when running One-Click Configure',
+                style: {
+                  marginLeft: 'auto',
+                  padding: '2px 8px',
+                  fontSize: '11px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  border: forcedIds[model.id] ? '1px solid #2e7d32' : '1px solid rgba(128,128,128,0.45)',
+                  background: forcedIds[model.id] ? 'rgba(46,125,50,0.12)' : 'transparent',
+                  color: forcedIds[model.id] ? '#2e7d32' : 'inherit',
+                },
+              }, forcedIds[model.id] ? 'Included ✓' : 'Force Include') : null
             ),
             h('p', { style: { margin: 0, fontSize: '12px', opacity: 0.85, lineHeight: 1.5 } }, model.description),
             r && r.detail && r.status !== 'ok' && r.status !== 'testing' ? h('p', {
