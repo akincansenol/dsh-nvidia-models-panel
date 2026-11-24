@@ -452,7 +452,7 @@ export function memberSupportsImage(member) {
   const mods = (member && member.inputModalities) || [];
   if (mods.includes('image')) return true;
   // 防御：未标注模态时按 id 名称兜底推断。
-  return /vision|vl\b|omni|diffusion|image/i.test(String((member && member.id) || ''));
+  return /vision|vl\b|omni|diffusion|image|multimodal|muse-glimmer|mistral-large-4|kimi-k(2\.5|3)|gemma-[34]|llama-4|deepseek-v4/i.test(String((member && member.id) || ''));
 }
 
 /**

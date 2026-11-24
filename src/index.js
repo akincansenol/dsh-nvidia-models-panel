@@ -42,9 +42,19 @@ const DEFAULT_CONTEXT_WINDOW = 1048576;
  * @param {number} [upstreamCtx] 上游上报的 context_window（若有）
  */
 export function inferReasoning(id, upstreamReasoning) {
-  if (typeof upstreamReasoning === 'boolean') return upstreamReasoning;
+  if (upstreamReasoning === true) return true;
   const s = String(id || '');
-  return /reason|thinking|omni|r1\b|qwq|deepseek-(r1|v3\.2|v4)|kimi-k|glm-[45]|nemotron-3|minimax-m|gpt-oss|step-[35]/i.test(s);
+  return /reason|thinking|omni|r1\b|qwq|qwen3|deepseek-(r1|v3\.2|v4)|kimi-k|glm-[45]|nemotron-3|minimax-m|mistral-large-4|gpt-oss|step-[35]/i.test(s);
+}
+
+export function inferVision(id) {
+  const s = String(id || '');
+  return /vision|vl\b|omni|diffusion|image|multimodal|muse-glimmer|mistral-large-4|kimi-k(2\.5|3)|gemma-[34]|llama-4|deepseek-v4/i.test(s);
+}
+
+export function inferMaxTokens(id, upstreamMax) {
+  if (Number.isFinite(upstreamMax) && upstreamMax > 0) return Math.round(upstreamMax);
+  return inferReasoning(id) ? 32768 : 16384;
 }
 
 export function inferContextWindow(id, upstreamCtx) {
@@ -286,9 +296,9 @@ async function configureNvidiaModels(ctx, probeResults) {
       id: 'custom-nvidia/' + m.id,
       name: m.name + ' - ' + m.description,
       contextWindow: inferContextWindow(m.id, m.upstreamCtx),
-      maxTokens: 8192,
+      maxTokens: inferMaxTokens(m.id, m.upstreamMaxTokens),
       reasoning: inferReasoning(m.id, probedReasoning ?? m.upstreamReasoning),
-      input: /vision|vl|omni|diffusion|image/i.test(m.id) ? ['text', 'image'] : ['text'],
+      input: inferVision(m.id) ? ['text', 'image'] : ['text'],
     };
   });
   try {
@@ -348,6 +358,7 @@ async function detectNvidiaModels() {
       upstreamCtx: (Number.isFinite(m.context_window) && m.context_window > 0)
         ? m.context_window
         : (Number.isFinite(m.context_length) && m.context_length > 0 ? m.context_length : undefined),
+      upstreamMaxTokens: (Number.isFinite(m.max_tokens) && m.max_tokens > 0) ? m.max_tokens : (Number.isFinite(m.max_output_tokens) && m.max_output_tokens > 0 ? m.max_output_tokens : undefined),
       upstreamReasoning: typeof m.reasoning === 'boolean' ? m.reasoning : (typeof m.supports_reasoning === 'boolean' ? m.supports_reasoning : undefined),
     })).filter((m) => m.id);
     models.sort((a, b) => a.id.localeCompare(b.id));
@@ -619,7 +630,7 @@ function normalizeGroupMembers(list) {
     id: String(m.id || ''),
     name: String(m.name || m.id || ''),
     description: String(m.description || ''),
-    inputModalities: Array.isArray(m.input) ? m.input : (Array.isArray(m.inputModalities) ? m.inputModalities : (/vision|vl|omni|diffusion|image/i.test(String(m.id || '')) ? ['text', 'image'] : ['text'])),
+    inputModalities: Array.isArray(m.input) ? m.input : (Array.isArray(m.inputModalities) ? m.inputModalities : (inferVision(m.id) ? ['text', 'image'] : ['text'])),
     // 组成员也不再用「未知即 128K」：优先上游值/推断值，再没有就留 null（不虚假声明）。
     contextWindow: Number.isFinite(m.contextWindow) ? m.contextWindow : (Number.isFinite(m.upstreamCtx) ? m.upstreamCtx : inferContextWindow(m.id)),
     maxTokens: Number.isFinite(m.maxTokens) ? m.maxTokens : null,
